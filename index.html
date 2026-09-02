@@ -9,23 +9,23 @@
 </head>
 <body>
   <aside>
-    <div class="brand"><div class="logo">FM</div><div><b>Fleet Desktop</b><small>v0.1.2</small></div></div>
+    <div class="brand"><div class="logo">FM</div><div><b>Fleet Desktop</b><small>v0.2.0</small></div></div>
     <nav>
       <button data-page="dashboard" class="active">ภาพรวม</button>
       <button data-page="assets">ทรัพย์สิน</button>
       <button data-page="usage">การใช้รถ/เครื่องจักร</button>
-      <button data-page="maintenance">ซ่อมบำรุง <span>Foundation</span></button>
-      <button data-page="fuel">เชื้อเพลิง/ค่าใช้จ่าย <span>Foundation</span></button>
-      <button data-page="people">พนักงานและผู้ใช้งาน <span>Foundation</span></button>
+      <button data-page="maintenance">ซ่อมบำรุง <span>ถัดไป</span></button>
+      <button data-page="fuel">เชื้อเพลิง/ค่าใช้จ่าย <span>ถัดไป</span></button>
+      <button data-page="people">พนักงานและผู้ใช้งาน</button>
       <button data-page="settings">ตั้งค่า</button>
     </nav>
-    <div class="bottom"><small id="dbPath"></small><button id="backupBtn">สำรองฐานข้อมูล</button></div>
+    <div class="bottom"><small id="dbPath"></small><button id="backupBtn">สำรองฐานข้อมูล</button><button id="restoreBtn">กู้คืนฐานข้อมูล</button></div>
   </aside>
   <main>
-    <header><div><h1 id="pageTitle">ภาพรวม</h1><p>Fleet & Machinery Management</p></div><div class="badge">LOCAL</div></header>
+    <header><div><h1 id="pageTitle">ภาพรวม</h1><p>Fleet & Machinery Management</p></div><div class="badge">OFFLINE / LOCAL</div></header>
     <section id="content"></section>
   </main>
-  <div id="modal" class="modal hidden"><div class="dialog"><div class="dialog-head"><h2>บันทึกคำขอใช้รถ/เครื่องจักร</h2><button id="closeModal">×</button></div><form id="usageForm"><label>ผู้ขอใช้<input name="requester_name" required></label><label>หน่วยงาน<input name="department_name"></label><label class="wide">วัตถุประสงค์<input name="purpose" required></label><label class="wide">ปลายทาง<input name="destination"></label><label>เริ่มใช้<input type="datetime-local" name="planned_start_at" required></label><label>สิ้นสุด<input type="datetime-local" name="planned_end_at" required></label><label class="wide">รถ/เครื่องจักร<select name="assigned_asset_id" id="assetSelect"><option value="">ยังไม่จัดสรร</option></select></label><div class="actions wide"><button type="button" id="cancelModal">ยกเลิก</button><button class="primary" type="submit">บันทึกคำขอ</button></div></form></div></div>
+  <div id="modal" class="modal hidden"><div class="dialog" id="dialog"></div></div>
   <script src="src/renderer/app.js"></script>
 </body>
 </html>
