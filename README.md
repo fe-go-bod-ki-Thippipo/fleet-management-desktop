@@ -1,43 +1,33 @@
-# Fleet & Machinery Desktop v0.4.0 — Parity Recovery
+# Fleet & Machinery Desktop v0.4.1 — v0.13.4 Baseline RC
 
-Fleet & Machinery Desktop เป็นโปรแกรม Desktop Offline (Electron + SQLite) สำหรับระบบทะเบียนรถยนต์และเครื่องจักร โดย **Fleet Web v0.13.4 คือ Functional Source of Truth / Minimum Baseline**
+Fleet & Machinery Desktop เป็นโปรแกรม Desktop Offline (Electron + SQLite) โดย **Fleet Web v0.13.4 คือ Functional Source of Truth / Minimum Baseline**
 
-> สถานะปัจจุบัน: **ยังไม่ใช่ Desktop Parity Baseline**
->
-> v0.4.0 เป็น Parity Recovery Build สำหรับย้ายและทดสอบความสามารถจาก v0.13.4 บน Desktop เท่านั้น การ Build ผ่านหรือสร้าง `.exe` สำเร็จ **ไม่ได้แปลว่า Feature Parity ครบ**
+> สถานะปัจจุบัน: **Baseline RC** — ฟังก์ชันขั้นต่ำจาก v0.13.4 ถูกยกกลับเข้าตัว Desktop แล้วในระดับ Source/Static Acceptance แต่ยังต้องผ่าน **runtime acceptance บน Windows EXE** ก่อนประกาศเป็น Desktop Parity Baseline อย่างเป็นทางการ
+
+## Minimum parity ที่รวมใน v0.4.1
+
+- Role context: Admin / Manager / Clerk / Fleet Officer / Requester / Viewer
+- Menu permission และ Data Scope ระดับ Company / Operating Unit
+- Global Asset Search + Notification สำหรับเอกสารใกล้หมดอายุ
+- Asset Register 90 รายการ พร้อม Owner / Company / Department / Location / Home Unit / Managing Unit / Person / Meter
+- Asset Form แบบ canonical reference และ Type → Brand → Model, Brand → Color filtering
+- Asset Profile: รูปหลัก/หลายรูป, completeness, important documents, tabs และ timeline/audit
+- Global + per-asset Documents, filter/search/status/30-60-90/date range/pagination/CSV และ renewal foundation
+- Canonical Owner Registry พร้อม reimbursement fields, deactivate และ reference-delete guard
+- Person / Employee Master แยก User Account, HR Employee ID, Fleet Roles และ Data Scope
+- Master Data stable IDs พร้อม edit/deactivate/delete guard และ relation fields
+- Calendar แบบ Month grid สำหรับ Usage / Maintenance / PM พร้อม click-through
+- Usage / Approval / Assignment / Return workflow foundation
+- Maintenance / PM / Incident, Fuel / Expense, Reports
+- Audit search/detail/CSV
+- JSON + SQLite Backup/Restore
+- Windows NSIS Installer + Portable EXE build configuration
 
 ## Feature Parity Matrix
 
-ใช้ `docs/FEATURE-PARITY-MATRIX-v0.13.4.md` เป็น Checklist หลักในการพัฒนาและ Acceptance Test ต่อจากนี้
+ใช้ `docs/FEATURE-PARITY-MATRIX-v0.13.4.md` เป็น Requirement checklist และ acceptance reference หลัก ห้ามลดความสามารถของ v0.13.4 เพื่อแลกกับการทำ Desktop ให้ง่ายขึ้น
 
-กฎการพัฒนา:
-
-1. ทุก Requirement เดิมของ v0.13.4 เป็น MUST จนกว่าจะระบุเป็นอย่างอื่นอย่างชัดเจน
-2. ห้ามลดความสามารถของ Asset / Documents / Owner / Person / Master / Permission / Data Scope / Calendar / Reports / Audit เพื่อแลกกับการทำ Desktop ให้ง่ายขึ้น
-3. ฟังก์ชันที่มีเพียงหน้าจอหรือชื่อฟังก์ชัน แต่ยังไม่ครบ Workflow/Data relationship/Permission/History ให้ถือเป็น `PARTIAL`
-4. Release จะเรียกว่า `Desktop Parity Baseline` ได้ต่อเมื่อ Matrix ทุก MUST row เป็น `PASS`
-5. หลัง Parity ครบแล้วจึงค่อยเพิ่ม Desktop-specific features ต่อโดยไม่ทำให้ Baseline ถอยหลัง
-
-## สิ่งที่มีใน v0.4.0 Recovery Build
-
-- Electron Offline + SQLite persistence
-- Asset Seed 90 รายการ
-- Asset Registry / Asset Profile / Edit
-- Documents / Renewal foundation
-- Photo foundation
-- Owner Registry foundation
-- Person/User foundation
-- Master Data foundation
-- Usage workflow foundation
-- Maintenance / PM / Incident foundation
-- Fuel / Expense / Reports foundation
-- Audit foundation
-- SQLite Backup / Restore
-- Windows NSIS Installer + Portable build configuration
-
-รายการด้านบน **ไม่ใช่คำยืนยันว่าเทียบเท่า v0.13.4 ครบแล้ว** ให้ยึด Feature Parity Matrix เป็นหลัก
-
-## Build test EXE
+## Build / runtime acceptance
 
 ```bash
 npm install
@@ -49,8 +39,10 @@ npm run build:win
 ผลลัพธ์ที่คาดหวัง:
 
 ```text
-Fleet-Machinery-Desktop-0.4.0-Setup-x64.exe
-Fleet-Machinery-Desktop-0.4.0-Portable-x64.exe
+Fleet-Machinery-Desktop-0.4.1-Setup-x64.exe
+Fleet-Machinery-Desktop-0.4.1-Portable-x64.exe
 ```
 
-GitHub Actions ตั้งให้ Build เมื่อ Run workflow เองหรือ Push Tag `v*` เท่านั้น
+หลัง Build ให้ทดสอบ Portable ก่อน โดยตรวจ Role/Scope, Asset CRUD/Profile, Document renewal/filter, Owner/Person/Master reference, Calendar, Usage workflow, Audit และ Backup/Restore ก่อนประกาศ Baseline PASS
+
+GitHub Actions ตั้งให้ Build เฉพาะ `workflow_dispatch` หรือ Push Tag `v*` เพื่อไม่สร้าง run ทุก commit
