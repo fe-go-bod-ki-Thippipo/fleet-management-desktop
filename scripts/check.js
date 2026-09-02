@@ -1,4 +1,4 @@
-const fs=require('fs'),path=require('path');
+const fs=require('fs'),path=require('path'),cp=require('child_process');
 const root=path.resolve(__dirname,'..');
 const required=[
   'package.json','index.html','src/main/main.js','src/preload/preload.js','src/renderer/app.js','src/renderer/styles.css',
@@ -6,12 +6,10 @@ const required=[
   'database/migrations/003_hr_integration.sql','scripts/build-windows.bat','.github/workflows/build-windows.yml'
 ];
 let bad=0;
-for(const f of required){
-  if(!fs.existsSync(path.join(root,f))){console.error('MISSING',f);bad++}
-  else console.log('OK',f)
-}
+for(const f of required){if(!fs.existsSync(path.join(root,f))){console.error('MISSING',f);bad++}else console.log('OK',f)}
 const pkg=require(path.join(root,'package.json'));
-if(pkg.version!=='0.1.2'){console.error('VERSION mismatch',pkg.version);bad++}
+if(pkg.version!=='0.2.0'){console.error('VERSION mismatch',pkg.version);bad++}
 if(!pkg.scripts['build:win']){console.error('MISSING build:win script');bad++}
-console.log('NOTE build icon is optional in v0.1.2; default Electron icon is allowed for CI packaging.');
+for(const f of ['src/main/main.js','src/preload/preload.js','src/renderer/app.js','src/services/database.js']){try{cp.execFileSync(process.execPath,['--check',path.join(root,f)],{stdio:'pipe'});console.log('SYNTAX OK',f)}catch(e){console.error('SYNTAX ERROR',f,String(e.stderr||e.message));bad++}}
+console.log('NOTE: custom build icon is optional; default Electron icon is allowed.');
 process.exitCode=bad?1:0;
