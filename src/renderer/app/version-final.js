@@ -8,3 +8,7 @@ setTimeout(()=>{
   const label=document.querySelector('.brand small');
   if(label)label.textContent='v0.4.2 · v0.13.4 Parity Correction';
 },180);
+/* Load the latest Asset Detail requirement layer after all parity overrides. */
+const assetDetailLatestScript=document.createElement('script');
+assetDetailLatestScript.src='src/renderer/app/asset-detail-latest.js';
+document.body.appendChild(assetDetailLatestScript);
