@@ -1,11 +1,25 @@
 const { contextBridge, ipcRenderer } = require('electron');
-contextBridge.exposeInMainWorld('fleetAPI', {
-  info: () => ipcRenderer.invoke('app:info'),
+contextBridge.exposeInMainWorld('fleet', {
+  appInfo: () => ipcRenderer.invoke('app:info'),
   dashboard: () => ipcRenderer.invoke('dashboard:summary'),
-  assets: (q='') => ipcRenderer.invoke('assets:list', q),
-  usage: () => ipcRenderer.invoke('usage:list'),
-  createUsage: (payload) => ipcRenderer.invoke('usage:create', payload),
-  updateUsageStatus: (payload) => ipcRenderer.invoke('usage:update-status', payload),
-  recordReturn: (payload) => ipcRenderer.invoke('usage:return', payload),
-  backup: () => ipcRenderer.invoke('backup:create')
+  listAssets: (q='') => ipcRenderer.invoke('assets:list', q),
+  getAsset: id => ipcRenderer.invoke('assets:get', id),
+  saveAsset: p => ipcRenderer.invoke('assets:save', p),
+  deleteAsset: id => ipcRenderer.invoke('assets:delete', id),
+  listPeople: () => ipcRenderer.invoke('people:list'),
+  savePerson: p => ipcRenderer.invoke('people:save', p),
+  listCompanies: () => ipcRenderer.invoke('companies:list'),
+  saveCompany: p => ipcRenderer.invoke('companies:save', p),
+  listSites: () => ipcRenderer.invoke('sites:list'),
+  saveSite: p => ipcRenderer.invoke('sites:save', p),
+  listOwners: () => ipcRenderer.invoke('owners:list'),
+  saveOwner: p => ipcRenderer.invoke('owners:save', p),
+  listUsage: () => ipcRenderer.invoke('usage:list'),
+  getUsage: id => ipcRenderer.invoke('usage:get', id),
+  createUsage: p => ipcRenderer.invoke('usage:create', p),
+  updateUsageStatus: p => ipcRenderer.invoke('usage:update-status', p),
+  recordReturn: p => ipcRenderer.invoke('usage:return', p),
+  checkConflict: p => ipcRenderer.invoke('usage:conflict', p),
+  backup: () => ipcRenderer.invoke('backup:create'),
+  restore: () => ipcRenderer.invoke('backup:restore')
 });
