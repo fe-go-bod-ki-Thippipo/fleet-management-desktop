@@ -1,0 +1,28 @@
+{
+  "manifest": {
+    "package_id": "HRPKG-EXAMPLE-001",
+    "package_type": "HR_EMPLOYEE_MASTER",
+    "source_system": "HR",
+    "source_site": "CENTRAL",
+    "issued_at": "2026-09-02T09:00:00+07:00",
+    "schema_version": 1,
+    "contract_version": "1.0",
+    "record_count": 1,
+    "payload_hash": "EXAMPLE_ONLY",
+    "digital_signature": "EXAMPLE_ONLY"
+  },
+  "employees": [
+    {
+      "employee_id": "EMP0123",
+      "hr_employee_ref": "EMP0123",
+      "first_name": "ตัวอย่าง",
+      "last_name": "พนักงาน",
+      "company_ref": "CBH",
+      "department_ref": "DEP01",
+      "position": "พนักงานขับรถ",
+      "work_email": "example@company.local",
+      "employment_status": "ACTIVE",
+      "hr_updated_at": "2026-09-02T08:30:00+07:00"
+    }
+  ]
+}
