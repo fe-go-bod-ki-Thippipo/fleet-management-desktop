@@ -1,6 +1,6 @@
 {
   "name": "fleet-machinery-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Offline-first Fleet & Machinery Management Desktop",
   "main": "src/main/main.js",
   "private": true,
@@ -16,13 +16,8 @@
     "build:portable": "electron-builder --win portable --x64 --publish never",
     "pack:dir": "electron-builder --dir"
   },
-  "dependencies": {
-    "better-sqlite3": "^12.2.0"
-  },
-  "devDependencies": {
-    "electron": "^37.2.6",
-    "electron-builder": "^26.0.12"
-  },
+  "dependencies": {"better-sqlite3": "^12.2.0"},
+  "devDependencies": {"electron": "^37.2.6","electron-builder": "^26.0.12"},
   "build": {
     "appId": "th.co.ngantavee.fleetdesktop",
     "productName": "Fleet & Machinery Desktop",
@@ -32,15 +27,7 @@
     "asarUnpack": ["node_modules/better-sqlite3/**/*"],
     "directories": {"output": "release","buildResources": "build"},
     "win": {"target": [{"target":"nsis","arch":["x64"]},{"target":"portable","arch":["x64"]}]},
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Fleet & Machinery Desktop",
-      "deleteAppDataOnUninstall": false,
-      "artifactName": "Fleet-Machinery-Desktop-${version}-Setup-${arch}.${ext}"
-    },
+    "nsis": {"oneClick": false,"allowToChangeInstallationDirectory": true,"createDesktopShortcut": true,"createStartMenuShortcut": true,"shortcutName": "Fleet & Machinery Desktop","deleteAppDataOnUninstall": false,"artifactName": "Fleet-Machinery-Desktop-${version}-Setup-${arch}.${ext}"},
     "portable": {"artifactName": "Fleet-Machinery-Desktop-${version}-Portable-${arch}.${ext}"}
   }
 }
