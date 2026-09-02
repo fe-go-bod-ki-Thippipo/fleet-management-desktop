@@ -11,9 +11,9 @@
     "dev": "electron .",
     "check": "node scripts/check.js",
     "test": "node --test tests/*.test.js",
-    "build:win": "electron-builder --win nsis portable --x64",
-    "build:installer": "electron-builder --win nsis --x64",
-    "build:portable": "electron-builder --win portable --x64",
+    "build:win": "electron-builder --win --x64 --publish never",
+    "build:installer": "electron-builder --win nsis --x64 --publish never",
+    "build:portable": "electron-builder --win portable --x64 --publish never",
     "pack:dir": "electron-builder --dir"
   },
   "dependencies": {
@@ -45,8 +45,7 @@
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
-      ],
-      "artifactName": "Fleet-Machinery-Desktop-${version}-${arch}-${target}.${ext}"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -54,7 +53,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Fleet & Machinery Desktop",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Fleet-Machinery-Desktop-${version}-Setup-${arch}.${ext}"
     },
     "portable": {
       "artifactName": "Fleet-Machinery-Desktop-${version}-Portable-${arch}.${ext}"
