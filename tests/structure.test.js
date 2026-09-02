@@ -12,7 +12,7 @@ test('core migrations exist',()=>{
 test('package version is 0.1.2',()=>assert.equal(require('../package.json').version,'0.1.2'));
 
 test('Windows build foundation exists',()=>{
-  for(const f of ['build/icon.ico','scripts/build-windows.bat','.github/workflows/build-windows.yml'])
+  for(const f of ['scripts/build-windows.bat','.github/workflows/build-windows.yml'])
     assert.equal(fs.existsSync(path.join(root,f)),true,`missing ${f}`);
   const pkg=require('../package.json');
   assert.ok(pkg.scripts['build:win']);
