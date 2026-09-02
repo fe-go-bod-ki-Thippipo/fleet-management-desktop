@@ -1,0 +1,10 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs');
+const ui=fs.readFileSync('src/renderer/app/v0134-ui-parity.js','utf8');
+const docs=fs.readFileSync('src/renderer/app/parity-documents.js','utf8');
+const html=fs.readFileSync('index.html','utf8');
+test('asset registry restores v0.13.4 pagination columns and edit action',()=>{for(const x of ['V13_ASSET_SIZE','ก่อนหน้า','ถัดไป','HOME / MANAGING UNIT','อายุ','เลขไมล์/ชั่วโมง','data-edit-asset'])assert.ok(ui.includes(x),x)});
+test('asset general restores completeness and important document checklist',()=>{for(const x of ['ความครบถ้วนข้อมูล','เอกสารสำคัญ','ภาษีรถ','พ.ร.บ.','ประกันภัย','เอกสารในระบบ','รูปภาพ'])assert.ok(ui.includes(x),x)});
+test('document registry restores category cards reset export and pagination',()=>{for(const x of ['doc-category-cards','เอกสารทั้งหมด','ตรวจสภาพ','เอกสารอื่น','ล้างตัวกรอง','ส่งออก','V13_DOC_SIZE'])assert.ok(ui.includes(x),x)});
+test('document forms keep dynamic fields by document type',()=>{for(const x of ['tax','act','insurance','inspect','coverageStart','coverageEnd','premium','taxAmount'])assert.ok(docs.includes(x),x)});
+test('settings restores grouped v0.13.4 information architecture',()=>{for(const x of ['ประเภทรถและเครื่องจักร','ยี่ห้อและรุ่น','สีและเชื้อเพลิง','องค์กร พนักงาน และเจ้าของ','เอกสารและประกันภัย','V13_MASTER_GROUPS'])assert.ok(ui.includes(x),x)});
+test('new parity layer is loaded last',()=>{const i=html.lastIndexOf('v0134-ui-parity.js');assert.ok(i>html.lastIndexOf('parity-documents.js'))});
