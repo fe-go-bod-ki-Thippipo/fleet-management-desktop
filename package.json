@@ -1,6 +1,6 @@
 {
   "name": "fleet-machinery-desktop",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Offline-first Fleet & Machinery Management Desktop",
   "main": "src/main/main.js",
   "private": true,
@@ -28,25 +28,10 @@
     "productName": "Fleet & Machinery Desktop",
     "asar": true,
     "npmRebuild": true,
-    "files": [
-      "index.html",
-      "src/**/*",
-      "database/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
-    ],
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "win": {
-      "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
-      ]
-    },
+    "files": ["index.html","src/**/*","database/**/*","package.json"],
+    "asarUnpack": ["node_modules/better-sqlite3/**/*"],
+    "directories": {"output": "release","buildResources": "build"},
+    "win": {"target": [{"target":"nsis","arch":["x64"]},{"target":"portable","arch":["x64"]}]},
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -56,8 +41,6 @@
       "deleteAppDataOnUninstall": false,
       "artifactName": "Fleet-Machinery-Desktop-${version}-Setup-${arch}.${ext}"
     },
-    "portable": {
-      "artifactName": "Fleet-Machinery-Desktop-${version}-Portable-${arch}.${ext}"
-    }
+    "portable": {"artifactName": "Fleet-Machinery-Desktop-${version}-Portable-${arch}.${ext}"}
   }
 }
