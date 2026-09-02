@@ -32,7 +32,6 @@
       "index.html",
       "src/**/*",
       "database/**/*",
-      "build/icon.png",
       "package.json"
     ],
     "asarUnpack": [
@@ -43,7 +42,6 @@
       "buildResources": "build"
     },
     "win": {
-      "icon": "build/icon.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
