@@ -1,14 +1,10 @@
 /* Final release-version sync. Loaded last so legacy parity layers cannot downgrade STATE.version. */
-window.FLEET_DESKTOP_VERSION='0.4.2';
+window.FLEET_DESKTOP_VERSION='0.4.3';
 setTimeout(()=>{
   if(typeof STATE!=='undefined'&&STATE){
     STATE.version=window.FLEET_DESKTOP_VERSION;
     if(typeof save==='function')save(false);
   }
   const label=document.querySelector('.brand small');
-  if(label)label.textContent='v0.4.2 · v0.13.4 Parity Correction';
+  if(label)label.textContent='v0.4.3 · Asset UX Review';
 },180);
-/* Load the latest Asset Detail requirement layer after all parity overrides. */
-const assetDetailLatestScript=document.createElement('script');
-assetDetailLatestScript.src='src/renderer/app/asset-detail-latest.js';
-document.body.appendChild(assetDetailLatestScript);
