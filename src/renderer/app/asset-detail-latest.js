@@ -1,10 +1,10 @@
-/* Latest Asset Detail requirements: remove duplicate summary/timeline and enrich Audit. */
+/* Latest Asset Detail requirements: remove duplicate summary/timeline, separate completeness from documents, enrich Audit. */
 (function(){
   const previousAssetProfile=assetProfile;
   const REQUIRED_DOCS=[['tax','ภาษีรถ'],['act','พ.ร.บ.'],['insurance','ประกันภัย']];
-  const BASIC_LABELS={code:'รหัส',plate:'ทะเบียน/ชื่อ',assetCategory:'กลุ่มทรัพย์สิน',companyId:'บริษัท',ownerId:'เจ้าของ',homeOperatingUnitId:'Home Unit',managingOperatingUnitId:'Managing Unit',typeName:'ประเภท',brandName:'ยี่ห้อ'};
+  const BASIC_FIELDS=[['code','รหัส'],['plate','ทะเบียน/ชื่อ'],['assetCategory','กลุ่มทรัพย์สิน'],['companyId','บริษัท'],['ownerId','เจ้าของ'],['homeOperatingUnitId','Home Unit'],['managingOperatingUnitId','Managing Unit'],['typeName','ประเภท'],['brandName','ยี่ห้อ'],['vin','VIN']];
   function activeDocs(assetId){return (STATE.documents||[]).filter(d=>d.assetId===assetId&&!d.deleted&&d.status!=='inactive'&&d.status!=='superseded')}
-  function basicCompleteness(a){const c=pCompleteness(a);return {score:c.score,missing:c.missing.map(k=>BASIC_LABELS[k]||k)}}
+  function basicCompleteness(a){const filled=BASIC_FIELDS.filter(([k])=>String(a[k]||'').trim()).length;return {score:Math.round(filled/BASIC_FIELDS.length*100),missing:BASIC_FIELDS.filter(([k])=>!String(a[k]||'').trim()).map(([,label])=>label)}}
   function importantDocCount(a){const docs=activeDocs(a.id);return REQUIRED_DOCS.filter(([type])=>docs.some(d=>d.type===type)).length}
   function escJson(v){if(v===undefined||v===null)return '-';if(typeof v==='string')return esc(v||'-');try{return esc(JSON.stringify(v,null,2))}catch{return esc(String(v))}}
   function auditDetail(a){
@@ -21,9 +21,9 @@
     const heroInfo=document.querySelector('.hero-info');
     if(heroInfo){
       const completeness=[...heroInfo.querySelectorAll('.kv')].find(k=>k.querySelector('span')?.textContent.trim()==='ความครบถ้วน');
-      if(completeness){completeness.querySelector('span').textContent='ข้อมูลพื้นฐาน';completeness.querySelector('b').textContent=`${basic.score}%`;completeness.insertAdjacentHTML('afterend',`<div class="kv"><span>เอกสารสำคัญ</span><b>${docCount}/${REQUIRED_DOCS.length} รายการ</b></div>`)}
+      if(completeness){completeness.querySelector('span').textContent='ข้อมูลพื้นฐาน';completeness.querySelector('b').textContent=`${basic.score}%`;const oldDoc=[...heroInfo.querySelectorAll('.kv')].find(k=>k.querySelector('span')?.textContent.trim()==='เอกสารสำคัญ');if(oldDoc)oldDoc.remove();completeness.insertAdjacentHTML('afterend',`<div class="kv"><span>เอกสารสำคัญ</span><b>${docCount}/${REQUIRED_DOCS.length} รายการ</b></div>`)}
     }
-    const warn=document.querySelector('.hero .warn-box');if(warn)warn.innerHTML=`ข้อมูลพื้นฐานยังไม่ครบ: ${esc(basic.missing.join(', '))}`;
+    const warn=document.querySelector('.hero .warn-box');if(warn){if(basic.missing.length)warn.innerHTML=`ข้อมูลพื้นฐานยังไม่ครบ: ${esc(basic.missing.join(', '))}`;else warn.remove()}
     if(assetTab==='general'){
       document.querySelectorAll('.asset-general-side').forEach(x=>x.remove());
       const grid=document.querySelector('#assetTab .grid2');
