@@ -1,151 +1,63 @@
-# Fleet & Machinery Desktop v0.1.2
+# Fleet & Machinery Desktop v0.2.0
 
-Fleet & Machinery Desktop เป็นฐานโปรแกรม Desktop Offline สำหรับบริหารรถยนต์และเครื่องจักร โดยยึด Data/Architecture จาก Fleet Management Prototype v0.13.4 และสาย Desktop v0.1.x
+Fleet & Machinery Desktop เป็นโปรแกรม Desktop Offline สำหรับบริหารรถยนต์และเครื่องจักร ใช้ Electron + SQLite และออกแบบให้ต่อยอดไปสู่ระบบ Central/HR Integration ในอนาคตได้
 
-## จุดสำคัญของ v0.1.2
+## ฟังก์ชันที่ใช้งานได้ใน v0.2.0
 
-- Electron + SQLite (better-sqlite3)
-- Renderer entry ที่ `index.html`
-- Local App Data + Schema Migration + Backup
-- Asset / Owner / Person / User foundation
-- Usage Request foundation
-- Meter Reading กลาง รองรับ KM/HOUR
-- Maintenance / PM / Fuel / Expense / Incident schema foundation
-- HR Integration foundation
-- Windows build configuration ด้วย electron-builder
-- Windows Installer (NSIS) + Portable EXE target
-- App icon สำหรับ Windows
-- Batch script สำหรับ Build บน Windows
-- GitHub Actions workflow สำหรับ Build `.exe`
+- Dashboard สรุปทรัพย์สินและรายการใช้งาน
+- Asset CRUD: เพิ่ม/แก้ไข/ลบแบบ Soft Delete, ทะเบียน, สถานะ, เลขไมล์/ชั่วโมง, เจ้าของ, ผู้รับผิดชอบ, บริษัท และ Site
+- Usage Workflow: บันทึกคำขอ, ตรวจรายการซ้อน, พิมพ์ใบขอใช้, บันทึกผลอนุมัติ, เลขไมล์/เชื้อเพลิงก่อนใช้, บันทึกคืน, เลขไมล์/เชื้อเพลิงหลังใช้ และปิดงาน
+- Person / Employee Master แบบ Local พร้อมโครงเชื่อม HR
+- Settings: Company, Site และ Owner Registry
+- Backup / Restore SQLite
+- Audit foundation
+- Windows Installer + Portable EXE ผ่าน electron-builder
+- GitHub Actions สร้างไฟล์ `.exe` อัตโนมัติเมื่อ push เข้า `main`, push tag `v*` หรือ Run workflow เอง
 
-> v0.1.2 ยังเป็น Development Foundation. Maintenance, Fuel/Cost และ Usage Workflow เต็มจะพัฒนาต่อในรุ่นถัดไป
+## โมดูลที่วาง Schema แล้วแต่ยังไม่เปิด Workflow เต็ม
 
-## ทดลองรันบน Windows
+- Maintenance / Repair / Work Order
+- PM Plan / Schedule
+- Fuel Transaction
+- Expense Ledger / Cost
+- Incident
+- HR Package Integration
 
-ต้องติดตั้ง Node.js LTS ก่อน แล้วเปิด Command Prompt/Terminal ที่โฟลเดอร์โปรเจกต์:
+## ทดลองรัน
 
 ```bash
 npm install
 npm start
 ```
 
-หรือดับเบิลคลิก:
-
-```text
-scripts/run-development.bat
-```
-
-## สร้างไฟล์ Windows `.exe`
-
-วิธีง่ายสุดบน Windows คือดับเบิลคลิก:
-
-```text
-scripts/build-windows.bat
-```
-
-Script จะทำตามลำดับ:
-
-1. ตรวจ Node.js
-2. `npm install`
-3. `npm run check`
-4. `npm test`
-5. `npm run build:win`
-6. เปิดโฟลเดอร์ `release/`
-
-หรือใช้ Terminal:
+## สร้าง Windows EXE
 
 ```bash
 npm install
+npm run check
+npm test
 npm run build:win
 ```
 
-ไฟล์ที่ได้จะอยู่ใน:
+ไฟล์จะอยู่ใน `release/` โดย target หลักคือ:
 
 ```text
-release/
+Fleet-Machinery-Desktop-0.2.0-Setup-x64.exe
+Fleet-Machinery-Desktop-0.2.0-Portable-x64.exe
 ```
 
-โดย target หลักคือ:
+## GitHub Actions
 
-```text
-Fleet-Machinery-Desktop-0.1.2-x64-nsis.exe
-Fleet-Machinery-Desktop-0.1.2-Portable-x64.exe
-```
+ไปที่ **Actions → Build Windows EXE** แล้วเลือก **Run workflow** หรือ push เข้า `main` ระบบจะ Build และเก็บไฟล์ `.exe` เป็น Artifact ให้อัตโนมัติ
 
-> ชื่อจริงอาจแตกต่างเล็กน้อยตาม electron-builder แต่จะอยู่ใน `release/` เสมอ
+## Data Location
 
-## Build แยกประเภท
+โปรแกรมเก็บฐานข้อมูล SQLite และไฟล์งานไว้ใน App Data ของผู้ใช้ ไม่เก็บฐานข้อมูลจริงไว้ใน Repository และ `.gitignore` จะตัด `node_modules`, local DB, backups, attachments และ `release/` ออก
 
-Installer:
+## Architecture
 
-```bash
-npm run build:installer
-```
+ระบบยังคงหลัก Offline-first / Distributed Offline + Central Control โดยวางฐานสำหรับ Asset, Usage, Maintenance, Fuel/Cost, Person/Employee, Owner Registry, Site/Device, Audit, Backup/Restore และ HR Integration
 
-Portable:
+## Production Note
 
-```bash
-npm run build:portable
-```
-
-## Build ผ่าน GitHub Actions
-
-ไฟล์ workflow อยู่ที่:
-
-```text
-.github/workflows/build-windows.yml
-```
-
-หลัง Push ขึ้น GitHub สามารถเปิดแท็บ **Actions → Build Windows EXE → Run workflow** แล้วดาวน์โหลด Artifact ที่ GitHub สร้างให้ได้
-
-หรือสร้าง Tag เช่น:
-
-```bash
-git tag v0.1.2
-git push origin v0.1.2
-```
-
-Workflow จะเริ่ม Build อัตโนมัติ
-
-## โครงสร้าง Repository
-
-```text
-fleet-desktop-v0.1.2/
-├─ .github/workflows/build-windows.yml
-├─ build/
-│  ├─ icon.ico
-│  └─ icon.png
-├─ database/migrations/
-├─ docs/
-├─ scripts/
-│  ├─ build-windows.bat
-│  ├─ run-development.bat
-│  └─ check.js
-├─ src/
-│  ├─ main/
-│  ├─ preload/
-│  ├─ renderer/
-│  └─ services/
-├─ tests/
-├─ index.html
-├─ package.json
-├─ CHANGELOG.md
-└─ README.md
-```
-
-## GitHub
-
-```bash
-git init
-git add .
-git commit -m "Fleet Desktop v0.1.2"
-git branch -M main
-git remote add origin <YOUR_GITHUB_REPOSITORY>
-git push -u origin main
-```
-
-`.gitignore` ไม่รวม `node_modules`, local SQLite DB, attachments, backups และ build output `release/`
-
-## Security / Production note
-
-ก่อนใช้งาน Production เต็มรูปแบบยังต้องเพิ่ม Local Authentication, Permission enforcement, encryption/key management, signed exchange packages, Restore workflow และ security review
+v0.2.0 เป็น Functional MVP สำหรับทดสอบ Workflow งานจริง ยังต้องพัฒนา Local Authentication, Permission enforcement, document attachment storage, signed package exchange, security review และ workflow ของ Maintenance/Fuel ก่อน Production เต็มรูปแบบ
