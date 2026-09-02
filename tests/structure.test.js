@@ -9,13 +9,14 @@ test('core migrations exist',()=>{
     assert.equal(fs.existsSync(path.join(root,'database/migrations',f)),true);
 });
 
-test('package version is 0.1.2',()=>assert.equal(require('../package.json').version,'0.1.2'));
+test('package version is 0.2.0',()=>assert.equal(require('../package.json').version,'0.2.0'));
 
-test('Windows build foundation exists',()=>{
-  for(const f of ['scripts/build-windows.bat','.github/workflows/build-windows.yml'])
+test('functional MVP files exist',()=>{
+  for(const f of ['src/services/database.js','src/renderer/app.js','scripts/build-windows.bat','.github/workflows/build-windows.yml'])
     assert.equal(fs.existsSync(path.join(root,f)),true,`missing ${f}`);
   const pkg=require('../package.json');
   assert.ok(pkg.scripts['build:win']);
   assert.ok(pkg.build.win);
   assert.ok(pkg.build.nsis);
+  assert.ok(pkg.build.portable);
 });
