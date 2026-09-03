@@ -5,7 +5,7 @@
 | ID | รายการตรวจ | เกณฑ์ผ่าน | ผล |
 |---|---|---|---|
 | REQ-01A | Version ซ้ำ | Asset + ประเภทเดียวกันใน chain เดียวกันไม่มีเลข Version ซ้ำ; Add Document ซ้ำต้องถูกบล็อกและให้ใช้ต่ออายุ | ☐ |
-| REQ-01B | Version Chain | ใช้ `previousVersionId / supersededById`; v1 แสดง Next, v2 แสดง Previous/Next, latest แสดง Previous; Legacy/Unlinked ไม่ปน chain | ☐ |
+| REQ-01B | Version Chain | ใช้ `previousVersionId / supersededById`; v1 แสดงเฉพาะ Next; v2/v3/Version ที่ตามมาแสดงเฉพาะ Previous ของตัวเอง; Legacy/Unlinked ไม่ปน chain | ☐ |
 | REQ-02 | Expense | ค่าใช้จ่ายบันทึกได้และแสดงใน Document Registry/Detail | ☐ |
 | REQ-03 | Renewal Source | ต่ออายุจาก Document ID ที่กดจริง; Asset/Type ถูกล็อก; source/latest ถูกต้อง | ☐ |
 | REQ-04 | Photo Management | เพิ่ม/ลบ/ตั้งรูปหลักได้จาก Asset UI และ Audit ยังทำงาน | ☐ |
@@ -20,7 +20,7 @@
 ## Scenario บังคับ
 
 1. เลือกเอกสารปัจจุบันหนึ่งรายการ → ต่ออายุ 2 รอบ → ต้องได้ `v1 → v2 → v3` โดยไม่มี Version ซ้ำใน chain.
-2. เปิด v2 → Previous ต้องไป v1 และ Next ต้องไป v3.
+2. เปิด v1 → ต้องเห็นเฉพาะลิงก์ไป Version ถัดไป v2. เปิด v2 → ต้องเห็นเฉพาะลิงก์กลับ Version ก่อนหน้า v1. เปิด v3 → ต้องเห็นเฉพาะลิงก์กลับ Version ก่อนหน้า v2.
 3. เปิด v1/v2/v3 ทีละรายการ → `เปิดไฟล์` ต้องเปิด attachment ของ Document ID นั้น ไม่ใช่ไฟล์ของ latest.
 4. ทดลอง Add Document ประเภทเดิมให้ Asset เดิม → ระบบต้องไม่สร้าง v1 ซ้ำ และแจ้งให้ใช้ `ต่ออายุ`.
 5. Login/เลือกบทบาท non-admin → ต้องไม่สามารถลบเอกสารได้.
