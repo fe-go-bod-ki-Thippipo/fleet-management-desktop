@@ -1,20 +1,21 @@
-# Fleet & Machinery Desktop v0.4.4 — Asset Requirements Complete
+# Fleet & Machinery Desktop v0.4.5 — Asset Review Requirements 1–6
 
 Fleet & Machinery Desktop เป็นโปรแกรม Desktop Offline (Electron + SQLite) โดย **Fleet Web v0.13.4 คือ Functional Source of Truth / Minimum Baseline**
 
-> สถานะ: ปิด Requirement ที่ค้างในส่วนข้อมูลทรัพย์สินเพื่อเข้าสู่ runtime acceptance ก่อนย้ายไปโมดูลถัดไป
+> สถานะ: ปรับแก้เฉพาะ Requirement 1–6 จากรอบตรวจ Asset v0.4.4 และคงส่วนอื่นทั้งหมดไว้ตามเดิม เพื่อทดสอบ runtime ก่อนล็อก Asset module
 
-## Asset requirements ที่รวมใน v0.4.4
+## Requirement 1–6 ใน v0.4.5
 
-- Asset Registry: Pagination 10/20/50, Search/Status Filter, Edit ตาม Permission, คลิกทั้งแถวเพื่อเปิด Asset Detail และปุ่ม Action ไม่ทำให้เปิดแถวซ้ำ
-- Asset Registry มี `ล้างตัวกรอง` และรีเซ็ตกลับหน้า 1 โดย Search/Filter state ยังอยู่ระหว่างเปิดรายละเอียดและกลับรายการ
-- Asset Detail: Grouped Asset Form, ข้อมูลพื้นฐานแยกจากเอกสารสำคัญ, ไม่มี Timeline ซ้ำในข้อมูลทั่วไป
-- Header ใช้ `ข้อมูลพื้นฐาน xx%` และ `เอกสารสำคัญ x/3 รายการ` แยกความหมายชัดเจน
-- Audit เป็น History Center จุดเดียว พร้อม Search / Event / Date / Clear Filter / Before-After
-- Document ที่ผูกกับ Asset: แสดงชื่อ/ทะเบียนโดยไม่แสดง Asset Code ภายใน, คลิกแถวดูรายละเอียด, Version History, Edit/Renew
-- Attachment: ชื่อไฟล์คลิกได้ รองรับ Preview PDF และรูปภาพ รวม canonical attachment และ legacy attachmentData/attachmentName
-- Renewal ใช้ immutable version chain และเลข Version ใหม่
-- กำหนดมาตรฐานกลาง `Global Interactive Table Standard`, `Global Filter Standard`, `Grouped Form Standard` สำหรับนำไปใช้กับโมดูลถัดไป
+1. แก้ Asset Registry Search ให้พิมพ์ต่อเนื่องตามลำดับปกติและรักษา cursor/focus
+2. Global Search แสดงหน้าผลลัพธ์หลายรายการก่อน ไม่เปิด Asset รายการแรกอัตโนมัติ
+3. เพิ่มปุ่ม `ล้างตัวกรอง` ใน Global Filter Bar เพื่อรีเซ็ต Search / Company / Unit
+4. การ์ด ภาษี / พ.ร.บ. / ประกัน ใน Asset Header คลิกไปเอกสารล่าสุดได้ และถ้ายังไม่มีสามารถเริ่มเพิ่มเอกสารประเภทนั้นได้ตาม Permission
+5. เอกสารใน Asset Detail แบ่งกลุ่มตามประเภท เอกสารปัจจุบันอยู่บนสุด เอกสารเก่า/หมดอายุมีสถานะชัด และ Version เก่าเป็น read-only
+6. ปรับหน้า `ประวัติ/Audit` เป็น Audit Trail ใหม่ มี Summary, Search/Filter, Event chips, Timeline, Detail panel, Before/After และ Pagination
+
+## ขอบเขตการเปลี่ยนแปลง
+
+รอบ v0.4.5 นี้ไม่เปลี่ยน Workflow หรือโมดูลอื่นที่ไม่เกี่ยวข้องกับ Requirement 1–6 ข้างต้น และยังคง v0.13.4 parity baseline เดิม
 
 ## Build / runtime acceptance
 
@@ -25,12 +26,12 @@ npm test
 npm run build:win
 ```
 
-ผลลัพธ์:
+ผลลัพธ์ที่คาดหวัง:
 
 ```text
-Fleet-Machinery-Desktop-0.4.4-Setup-x64.exe
-Fleet-Machinery-Desktop-0.4.4-Portable-x64.exe
-fleet-desktop-v0.4.4-windows
+Fleet-Machinery-Desktop-0.4.5-Setup-x64.exe
+Fleet-Machinery-Desktop-0.4.5-Portable-x64.exe
+fleet-desktop-v0.4.5-windows
 ```
 
-หมายเหตุ: การผ่าน static check/test/build ไม่เท่ากับผ่านการทดสอบ click behavior บน Windows จริง จึงต้องตรวจ runtime รอบนี้ก่อนล็อก Asset module.
+หมายเหตุ: การผ่าน static check/test/build ไม่เท่ากับผ่านการทดสอบ click behavior บน Windows จริง จึงต้องตรวจ runtime ก่อนล็อก Asset module.
