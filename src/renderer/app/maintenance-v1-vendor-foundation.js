@@ -82,7 +82,7 @@
   }
   const oldRender=render;
   render=function(){if(view==='vendors'&&!assetDetailId)return vendorPage();return oldRender();};
-  setTimeout(()=>{ensureVendorState();save(false);if(typeof renderNav==='function')renderNav();if(typeof parityRefreshShell==='function')parityRefreshShell();},0);
+  setTimeout(()=>{if(!STATE)return;ensureVendorState();save(false);if(typeof renderNav==='function')renderNav();if(typeof parityRefreshShell==='function')parityRefreshShell();},0);
 
   window.FLEET_VENDOR_TEST={ensureVendorState,vendorDuplicate,nextVendorCode,vendorDisplay,canManageVendor,canDeleteVendor};
 })();
