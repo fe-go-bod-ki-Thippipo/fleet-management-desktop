@@ -1,55 +1,24 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
 
-function load(role='admin'){
+function load(role='admin',{view='dashboard'}={}){
   const STATE={vendors:[{id:'V1',code:'VEN-001',name:'อู่ เอ',type:'external'},{id:'V2',code:'VEN-002',name:'อู่ลบแล้ว',type:'external',deleted:true}]};
-  const NAV=[['ตั้งค่า',[['masters','ตั้งค่าข้อมูลทรัพย์สิน']]]];
-  const PARITY_MENU={admin:[],manager:[],fleetOfficer:[],viewer:[]};
-  const ctx={STATE,NAV,PARITY_MENU,CURRENT_ROLE:role,window:null,console,structuredClone:global.structuredClone,
-    render:()=>{},view:'dashboard',assetDetailId:'',migrateState:()=>{},setTimeout:fn=>{fn();return 0},save:()=>{},renderNav:()=>{},parityRefreshShell:()=>{},
-    setHead:()=>{},content:{innerHTML:''},toast:()=>{},confirm:()=>true,now:()=> '2026-09-08T00:00:00.000Z',uid:p=>`${p}-TEST`,esc:v=>String(v??''),pill:v=>String(v),
-    $:()=>({value:'',innerHTML:'',oninput:null,onchange:null,onclick:null}),$$:()=>[],fld:()=>'',sel:()=>'',area:()=>'',formModal:()=>{}};
-  ctx.window=ctx;vm.createContext(ctx);
-  vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-vendor-foundation.js','utf8'),ctx);
-  return {ctx,STATE,NAV,PARITY_MENU,api:ctx.FLEET_VENDOR_TEST};
+  const NAV=[['ตั้งค่า',[['masters','ตั้งค่าข้อมูลทรัพย์สิน']]]];const PARITY_MENU={admin:[],manager:[],fleetOfficer:[],clerk:[],requester:[],viewer:[]};
+  const calls={render:0,toast:[],audit:[],form:0};const elements=new Map();const el=id=>{if(!elements.has(id))elements.set(id,{value:'',innerHTML:'',oninput:null,onchange:null,onclick:null});return elements.get(id)};
+  const ctx={STATE,NAV,PARITY_MENU,CURRENT_ROLE:role,window:null,console,structuredClone:global.structuredClone,render:()=>{calls.render++},view,assetDetailId:'',migrateState:()=>{},setTimeout:fn=>{fn();return 0},save:()=>{},pAudit:(...a)=>calls.audit.push(a),renderNav:()=>{},parityRefreshShell:()=>{},setHead:()=>{},content:{innerHTML:''},toast:m=>calls.toast.push(m),confirm:()=>true,now:()=> '2026-09-08T00:00:00.000Z',uid:p=>`${p}-TEST`,esc:v=>String(v??''),pill:v=>String(v),$:s=>el(s),$$:()=>[],fld:()=>'',sel:()=>'',area:()=>'',formModal:(title,html,onSave)=>{calls.form++;ctx.__form={title,html,onSave}}};
+  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-vendor-foundation.js','utf8'),ctx);return {ctx,STATE,NAV,PARITY_MENU,api:ctx.FLEET_VENDOR_TEST,calls};
 }
 
-test('vendor foundation initializes additive state without touching existing vendor data',()=>{
-  const {STATE,api}=load();api.ensureVendorState();
-  assert.equal(STATE.vendors.length,2);
-  assert.equal(STATE.vendors[0].active,true);
-  assert.equal(STATE.vendors[0].deleted,false);
-  assert.equal(STATE.vendors[0].source,'manual');
-  assert.equal(STATE.vendors[1].deleted,true);
-});
-
-test('vendor duplicate detection normalizes name and ignores soft-deleted rows',()=>{
-  const {api}=load();
-  assert.equal(api.vendorDuplicate('  อู่ เอ  '),true);
-  assert.equal(api.vendorDuplicate('อู่ลบแล้ว'),false);
-  assert.equal(api.vendorDuplicate('อู่ เอ','V1'),false);
-});
-
-test('vendor code generator skips existing codes',()=>{
-  const {api}=load();assert.equal(api.nextVendorCode(),'VEN-003');
-});
-
-test('vendor permissions follow locked role intent',()=>{
-  assert.equal(load('admin').api.canManageVendor(),true);assert.equal(load('admin').api.canDeleteVendor(),true);
-  assert.equal(load('manager').api.canManageVendor(),true);assert.equal(load('manager').api.canDeleteVendor(),false);
-  assert.equal(load('fleetOfficer').api.canManageVendor(),true);assert.equal(load('fleetOfficer').api.canDeleteVendor(),false);
-  assert.equal(load('viewer').api.canManageVendor(),false);assert.equal(load('viewer').api.canDeleteVendor(),false);
-});
-
-test('vendor page is registered additively and only authorized roles receive menu access',()=>{
-  const {NAV,PARITY_MENU}=load();
-  assert.ok(NAV.find(x=>x[0]==='ตั้งค่า')[1].some(x=>x[0]==='vendors'));
-  for(const role of ['admin','manager','fleetOfficer'])assert.ok(PARITY_MENU[role].includes('vendors'));
-  assert.ok(!PARITY_MENU.viewer.includes('vendors'));
-});
-
-test('vendor implementation uses audit-preserving soft delete and does not modify locked asset/document core',()=>{
-  const src=fs.readFileSync('src/renderer/app/maintenance-v1-vendor-foundation.js','utf8');
-  assert.match(src,/v\.deleted=true/);assert.match(src,/save\(true,'ลบผู้ให้บริการ','vendor'/);assert.match(src,/เฉพาะ Admin เท่านั้นที่ลบ Vendor Master ได้/);
-  assert.doesNotMatch(src,/assetProfile\s*=|documentPage\s*=|renderDocTable\s*=|assetForm/);
-  const index=fs.readFileSync('index.html','utf8');assert.match(index,/maintenance-v1-vendor-foundation\.js/);
-});
+test('vendor foundation initializes additive state without touching existing vendor data',()=>{const {STATE,api}=load();api.ensureVendorState();assert.equal(STATE.vendors.length,2);assert.equal(STATE.vendors[0].active,true);assert.equal(STATE.vendors[0].deleted,false);assert.equal(STATE.vendors[0].source,'manual');assert.equal(STATE.vendors[1].deleted,true)});
+test('vendor duplicate detection normalizes name and ignores soft-deleted rows',()=>{const {api}=load();assert.equal(api.vendorDuplicate('  อู่ เอ  '),true);assert.equal(api.vendorDuplicate('อู่ลบแล้ว'),false);assert.equal(api.vendorDuplicate('อู่ เอ','V1'),false)});
+test('vendor duplicate code protection normalizes code, ignores deleted rows and excludes self',()=>{const {api}=load();assert.equal(api.vendorCodeDuplicate(' ven-001 '),true);assert.equal(api.vendorCodeDuplicate('VEN-002'),false);assert.equal(api.vendorCodeDuplicate('VEN-001','V1'),false)});
+test('vendor code generator skips existing codes',()=>{const {api}=load();assert.equal(api.nextVendorCode(),'VEN-003')});
+test('vendor permissions fail closed and follow locked role intent',()=>{for(const [r,m,d] of [['admin',true,true],['manager',true,false],['fleetOfficer',true,false],['clerk',false,false],['requester',false,false],['viewer',false,false]]){const {api}=load(r);assert.equal(api.canManageVendor(),m,r);assert.equal(api.canDeleteVendor(),d,r)}});
+test('vendor page is registered additively and only authorized roles receive menu access',()=>{const {NAV,PARITY_MENU}=load();assert.ok(NAV.find(x=>x[0]==='ตั้งค่า')[1].some(x=>x[0]==='vendors'));for(const role of ['admin','manager','fleetOfficer'])assert.ok(PARITY_MENU[role].includes('vendors'));for(const role of ['clerk','requester','viewer'])assert.ok(!PARITY_MENU[role].includes('vendors'))});
+test('wrapped render delegates existing views to original render',()=>{for(const view of ['dashboard','assets','documents']){const {ctx,calls}=load('admin',{view});ctx.render();assert.equal(calls.render,1,view)}});
+test('wrapped render handles vendor view without delegating to original render',()=>{const {ctx,calls}=load('admin',{view:'vendors'});ctx.render();assert.equal(calls.render,0)});
+test('deleteVendor enforces permission at function level',()=>{for(const role of ['manager','fleetOfficer','viewer']){const {api,STATE,calls}=load(role);api.deleteVendor('V1');assert.notEqual(STATE.vendors[0].deleted,true,role);assert.ok(calls.toast.some(x=>x.includes('เฉพาะ Admin')),role)}});
+test('vendorForm blocks unauthorized roles before opening form',()=>{for(const role of ['clerk','requester','viewer']){const {api,calls}=load(role);api.vendorForm();assert.equal(calls.form,0,role);assert.ok(calls.toast.length,role)}});
+test('vendor form duplicate code blocks new record but permits own code on edit',async()=>{const a=load('admin');a.api.vendorForm();await assert.rejects(async()=>a.ctx.__form.onSave({code:'VEN-001',name:'อู่ใหม่',type:'external',active:'true'}),/รหัสผู้ให้บริการซ้ำ/);const b=load('admin');b.api.vendorForm('V1');assert.doesNotThrow(()=>b.ctx.__form.onSave({code:'VEN-001',name:'อู่ เอ',type:'external',active:'true'}))});
+test('vendor audit uses current baseline pAudit path with actual role context available',()=>{const {api,ctx,calls}=load('manager');api.vendorForm();ctx.__form.onSave({code:'VEN-003',name:'อู่ใหม่',type:'external',active:'true'});assert.equal(calls.audit.length,1);assert.equal(calls.audit[0][0],'เพิ่มผู้ให้บริการ');assert.equal(calls.audit[0][1],'vendor')});
+test('soft-deleted vendor remains historically resolvable but is not editable',()=>{const {api,ctx}=load('admin');api.vendorDetail('V2');assert.match(ctx.content.innerHTML,/ข้อมูลประวัติ/);assert.doesNotMatch(ctx.content.innerHTML,/id="vendorEdit"/)});
+test('vendor implementation remains isolated from locked asset/document functions',()=>{const src=fs.readFileSync('src/renderer/app/maintenance-v1-vendor-foundation.js','utf8');assert.match(src,/v\.deleted=true/);assert.match(src,/pAudit/);assert.doesNotMatch(src,/assetProfile\s*=|documentPage\s*=|renderDocTable\s*=|assetForm/);const index=fs.readFileSync('index.html','utf8');assert.match(index,/maintenance-v1-vendor-foundation\.js/)});
