@@ -3,8 +3,12 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
-    branches: ['release/v0.4.8-document-core-consolidation']
-    paths: ['BUILD-v0.4.8']
+    branches:
+      - 'release/v0.4.8-document-core-consolidation'
+      - 'feature/maintenance-v1-batch1-vendor-foundation'
+    paths:
+      - 'BUILD-v0.4.8'
+      - 'BUILD-maintenance-v1-batch1'
 jobs:
   build:
     runs-on: windows-latest
@@ -18,6 +22,6 @@ jobs:
       - run: npm run build:win
       - uses: actions/upload-artifact@v4
         with:
-          name: fleet-desktop-v0.4.8-windows
+          name: fleet-desktop-maintenance-v1-batch1-windows
           path: release/*.exe
           if-no-files-found: error
