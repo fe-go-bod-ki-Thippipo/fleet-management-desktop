@@ -1,4 +1,4 @@
-/* Maintenance Blueprint v1 — Batch 1: Vendor Master foundation.
+/* Maintenance Blueprint v1 — Batch 1/2: Vendor Master foundation + legacy Work Order vendor integration.
    Additive layer only: does not replace Asset/Document baseline functions. */
 (function(){
   const role=()=>typeof CURRENT_ROLE==='string'?CURRENT_ROLE:'';
@@ -9,6 +9,9 @@
   function ensureVendorState(){if(!STATE)return;STATE.vendors??=[];STATE.vendors.forEach(v=>{if(v.active===undefined)v.active=true;if(v.deleted===undefined)v.deleted=false;v.source??='manual';});}
   const oldMigrate=typeof migrateState==='function'?migrateState:null;if(oldMigrate)migrateState=function(){oldMigrate();ensureVendorState();};
   function vendorDisplay(v){return v?.name||'-'}
+  function activeVendors(){ensureVendorState();return STATE.vendors.filter(v=>!v.deleted&&v.active!==false);}
+  function vendorById(id){ensureVendorState();return STATE.vendors.find(v=>v.id===id)||null;}
+  function vendorNameById(id,snapshot=''){return String(snapshot||vendorById(id)?.name||'-');}
   function nextVendorCode(){ensureVendorState();let n=1;while(STATE.vendors.some(v=>v.code===`VEN-${String(n).padStart(3,'0')}`))n++;return `VEN-${String(n).padStart(3,'0')}`;}
   function vendorDuplicate(name,excludeId=''){const key=norm(name);return STATE.vendors.some(v=>!v.deleted&&v.id!==excludeId&&norm(v.name)===key);}
   function vendorCodeDuplicate(code,excludeId=''){const key=norm(code);return STATE.vendors.some(v=>!v.deleted&&v.id!==excludeId&&norm(v.code)===key);}
@@ -29,8 +32,25 @@
   }
   function deleteVendor(id){if(!canDeleteVendor())return toast('เฉพาะ Admin เท่านั้นที่ลบ Vendor Master ได้',true);const v=STATE.vendors.find(x=>x.id===id&&!x.deleted);if(!v)return;if(!confirm(`ลบผู้ให้บริการ "${v.name}" ?\nข้อมูลจะถูก Soft Delete และยังคงอยู่ในประวัติ`))return;const before=structuredClone(v);v.deleted=true;v.active=false;v.deletedAt=now();v.updatedAt=v.deletedAt;audit('ลบผู้ให้บริการ',v.id,before,v);vendorPage();toast('ลบผู้ให้บริการแล้ว');}
 
+  /* Batch 2 quick patch: stop creating new legacy Work Orders with free-text vendor.
+     vendorId is relationship source of truth; vendorNameSnapshot/vendor remain for history/compatibility. */
+  function vendorSelectHtml(selected=''){
+    const opts=[['','- ไม่ระบุผู้ให้บริการ -'],...activeVendors().map(v=>[v.id,`${v.type==='internal'?'[ภายใน]':'[ภายนอก]'} ${v.name}`])];
+    return sel('ผู้ให้บริการ / อู่','vendorId',opts,selected);
+  }
+  function saveLegacyMaintenanceWithVendor(p){
+    ensureVendorState();const vendorId=String(p.vendorId||'');let v=null;
+    if(vendorId){v=STATE.vendors.find(x=>x.id===vendorId&&!x.deleted&&x.active!==false);if(!v)throw Error('ผู้ให้บริการที่เลือกไม่พร้อมใช้งาน กรุณาเลือกใหม่');}
+    const x={id:uid('WO'),no:`WO-${String(STATE.maintenance.length+1).padStart(4,'0')}`,...p,vendorId:vendorId||'',vendorNameSnapshot:v?.name||'',vendor:v?.name||'',cost:+p.cost||0,createdAt:now()};
+    STATE.maintenance.push(x);const a=STATE.assets.find(y=>y.id===p.assetId);if(a&&!['done','closed'].includes(p.status))a.status='repair';if(x.cost)STATE.expenses.push({id:uid('EXP'),assetId:x.assetId,date:today(),type:'maintenance',sourceId:x.id,amount:x.cost,description:x.issue});save(true,'เปิดงานซ่อม','maintenance',x.id,null,x);return x;
+  }
+  function maintenanceFormWithVendor(){
+    formModal('เปิดงานซ่อม',`${selObj('ทรัพย์สิน','assetId',STATE.assets.filter(x=>!x.deleted),'','plate')}${sel('ประเภท','maintenanceType',[['repair','ซ่อม'],['inspection','ตรวจสอบ'],['service','บำรุงรักษา']])}${area('อาการ/รายละเอียด','issue')}${fld('มิเตอร์','meterValue','',false,'number')}${vendorSelectHtml()}${fld('ค่าใช้จ่าย','cost','0',false,'number')}${sel('สถานะ','status',[['new','ใหม่'],['checking','ตรวจสอบ'],['repairing','กำลังซ่อม'],['done','เสร็จ'],['closed','ปิดงาน']])}`,saveLegacyMaintenanceWithVendor);
+  }
+  if(typeof maintenanceForm==='function')maintenanceForm=maintenanceFormWithVendor;
+
   const settingGroup=NAV.find(x=>x[0]==='ตั้งค่า');if(settingGroup&&!settingGroup[1].some(x=>x[0]==='vendors'))settingGroup[1].push(['vendors','ผู้ให้บริการ / อู่ซ่อม']);if(typeof PARITY_MENU==='object'){['admin','manager','fleetOfficer'].forEach(r=>{if(PARITY_MENU[r]&&!PARITY_MENU[r].includes('vendors'))PARITY_MENU[r].push('vendors')});}
   const oldRender=render;render=function(){if(view==='vendors'&&!assetDetailId)return vendorPage();return oldRender();};
   setTimeout(()=>{if(!STATE)return;ensureVendorState();save(false);if(typeof renderNav==='function')renderNav();if(typeof parityRefreshShell==='function')parityRefreshShell();},0);
-  window.FLEET_VENDOR_TEST={ensureVendorState,vendorDuplicate,vendorCodeDuplicate,nextVendorCode,vendorDisplay,canManageVendor,canDeleteVendor,vendorForm,deleteVendor,vendorPage,vendorDetail};
+  window.FLEET_VENDOR_TEST={ensureVendorState,vendorDuplicate,vendorCodeDuplicate,nextVendorCode,vendorDisplay,activeVendors,vendorById,vendorNameById,vendorSelectHtml,saveLegacyMaintenanceWithVendor,maintenanceFormWithVendor,canManageVendor,canDeleteVendor,vendorForm,deleteVendor,vendorPage,vendorDetail};
 })();
