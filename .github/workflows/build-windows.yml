@@ -22,6 +22,6 @@ jobs:
       - run: npm run build:win
       - uses: actions/upload-artifact@v4
         with:
-          name: fleet-desktop-maintenance-v1-batch1-windows
+          name: fleet-desktop-v0.4.8-windows
           path: release/*.exe
           if-no-files-found: error
