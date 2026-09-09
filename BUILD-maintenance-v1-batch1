@@ -1,4 +1,4 @@
-Maintenance v1 Batch 1 — Vendor Master Foundation
-Product Owner Windows runtime acceptance candidate.
-Claude post-fix review: PASS / READY FOR TEST/BUILD.
-CI rerun after preserving locked v0.4.8 artifact contract.
+Maintenance v1 Batch 1/2 — Vendor Master + Work Order Vendor Integration
+Runtime defect patch: legacy Work Order vendor field now consumes Vendor Master.
+Architecture basis: Offline/Paper Approval Workflow review.
+Candidate for automated check/test/build only; Windows runtime acceptance remains Product Owner controlled.
