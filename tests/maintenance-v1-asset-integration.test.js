@@ -6,7 +6,7 @@ function loadRequest(){
   ctx.window=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),ctx);return {ctx,api:ctx.FLEET_MAINTENANCE_REQUEST_TEST};
 }
 
-test('assetLabelFor fallback never exposes raw asset ID',()=>{const {api}=loadRequest();const label=api.assetLabelFor({id:'SECRET-RAW-ID',code:'',plate:''});assert.equal(label,'(ไม่มีรหัส/ทะเบียน)');assert.doesNotMatch(label,/SECRET-RAW-ID/)});
+test('assetLabelFor uses plate then code then safe fallback without raw asset ID',()=>{const {api}=loadRequest();assert.equal(api.assetLabelFor({id:'A1',code:'FL-020',plate:'กล 4270'}),'กล 4270');assert.equal(api.assetLabelFor({id:'A2',code:'FL-021',plate:''}),'FL-021');const label=api.assetLabelFor({id:'SECRET-RAW-ID',code:'',plate:''});assert.equal(label,'(ไม่มีทะเบียน)');assert.doesNotMatch(label,/SECRET-RAW-ID/)});
 
 test('meter warning applies and removes warning class dynamically',()=>{const {api}=loadRequest();const active=new Set(),warn={textContent:'',classList:{toggle:(c,on)=>on?active.add(c):active.delete(c)}};const asset={mileage:1000};api.applyMeterWarning(warn,asset,'900');assert.match(warn.textContent,/คำเตือน/);assert.equal(active.has('warn-box'),true);api.applyMeterWarning(warn,asset,'1100');assert.equal(warn.textContent,'');assert.equal(active.has('warn-box'),false)});
 
