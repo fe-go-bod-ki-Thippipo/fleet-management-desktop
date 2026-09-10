@@ -138,7 +138,7 @@
     let resultHtml;
     if(result){const att=STATE.returnedApprovalAttachments.find(x=>x&&x.id===result.returnedApprovalAttachmentId);resultHtml=`<div class="grid3">${kv('ผล',decisionLabel(result.externalDecision))}${kv('ผู้อนุมัติ',result.externalApprovedBy||'-')}${kv('วันที่',result.externalApprovedAt||'-')}${kv('วงเงิน',result.externalApprovedAmount==null?'-':`฿${money(result.externalApprovedAmount)}`)}${kv('เอกสารที่ใช้',docs.find(d=>d.id===result.documentVersionId)?.documentNo||'-')}${kv('ไฟล์แนบกลับ',att?'มี':'ไม่มี')}</div><h4>หมายเหตุ</h4><p>${esc(result.externalApprovalNote||'-')}</p>${manage&&!hasLinkedWorkOrder(requestId)?'<button class="btn" id="apdEditResult">แก้ไขผลอนุมัติ</button>':''}`;
     }else resultHtml=request.status==='document_printed'&&manage?'<button class="btn primary" id="apdRecordResult">บันทึกผลอนุมัติจากภายนอก</button>':'<div class="empty">ยังไม่มีผลอนุมัติจากภายนอก</div>';
-    return `<div class="panel"><div class="toolbar"><div><h3>เอกสารขออนุมัติซ่อม</h3><div class="muted">สร้างเอกสารเพื่อพิมพ์และนำไปอนุมัติภายนอกระบบ</div></div>${createButton}</div>${versions}</div><div class="panel"><h3>ผลอนุมัติจากภายนอก</h3>${resultHtml}</div>`;
+    return `<div id="apdPanels"><div class="panel"><div class="toolbar"><div><h3>เอกสารขออนุมัติซ่อม</h3><div class="muted">สร้างเอกสารเพื่อพิมพ์และนำไปอนุมัติภายนอกระบบ</div></div>${createButton}</div>${versions}</div><div class="panel"><h3>ผลอนุมัติจากภายนอก</h3>${resultHtml}</div></div>`;
   }
 
   function repairHistoryPrintHtml(h){
@@ -178,11 +178,37 @@
     if($('#apdEditResult'))$('#apdEditResult').onclick=()=>resultForm(requestId);
   }
 
+  function appendApprovalPanels(requestId){
+    if(!requestById(requestId))return false;
+    const existing=content?.querySelector?.('#apdPanels');if(existing)return false;
+    content.insertAdjacentHTML?content.insertAdjacentHTML('beforeend',approvalPanelsHtml(requestId)):content.innerHTML+=approvalPanelsHtml(requestId);
+    bindApprovalPanelEvents(requestId);return true;
+  }
+
   function wrappedRequestDetail(id){
     if(originalRequestDetail)originalRequestDetail(id);
-    if(!requestById(id))return;
-    content.insertAdjacentHTML?content.insertAdjacentHTML('beforeend',approvalPanelsHtml(id)):content.innerHTML+=approvalPanelsHtml(id);
-    bindApprovalPanelEvents(id);
+    appendApprovalPanels(id);
+  }
+
+  function restoreApprovalPanelsIfNeeded(){
+    if(!content?.querySelector)return false;
+    const back=content.querySelector('#mrBack');
+    if(!back||content.querySelector('#apdPanels'))return false;
+    const requestNo=String(typeof title!=='undefined'&&title?.textContent||'').trim();
+    let request=STATE?.maintenanceRequests?.find?.(x=>x&&x.requestNo===requestNo)||null;
+    if(!request){
+      const legacyId=String(content.querySelector('[data-request-id]')?.dataset?.requestId||'');
+      if(legacyId)request=requestById(legacyId);
+    }
+    if(!request&&STATE?.maintenanceRequests?.length===1)request=STATE.maintenanceRequests[0];
+    if(!request)return false;
+    return appendApprovalPanels(request.id);
+  }
+
+  let approvalObserver=null;
+  if(typeof MutationObserver==='function'&&content){
+    approvalObserver=new MutationObserver(()=>restoreApprovalPanelsIfNeeded());
+    approvalObserver.observe(content,{childList:true,subtree:true});
   }
 
   if(requestApi&&originalRequestDetail)requestApi.requestDetail=wrappedRequestDetail;
@@ -192,5 +218,5 @@
   if(typeof document!=='undefined'&&document?.addEventListener){document.addEventListener('click',e=>{const t=e.target;if(t?.closest?.('[data-mr-edit],[data-mr-cancel]'))return;const row=t?.closest?.('[data-mr-row]');if(!row)return;e.preventDefault?.();e.stopImmediatePropagation?.();wrappedRequestDetail(row.dataset.mrRow);},true);}
 
   window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API={hasApprovedResult,resultForRequest,docsForRequest};
-  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest};
+  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest,appendApprovalPanels,restoreApprovalPanelsIfNeeded,approvalObserver};
 })();
