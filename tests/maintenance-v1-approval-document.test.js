@@ -7,13 +7,15 @@ function load(role='admin',overrides={}){
     vendors:[{id:'V1',name:'อู่ เอ',contactName:'ช่างเอก',phone:'0812345678'}],
     workOrders:[],repairItems:[],partItems:[],labourItems:[],vendorDispatches:[],externalServiceCosts:[],generatedApprovalDocuments:[],returnedApprovalAttachments:[],externalApprovalResults:[],userAccounts:[{role:'admin',personId:'P-ADMIN',active:true},{role:'manager',personId:'P-MGR',active:true},{role:'fleetOfficer',personId:'P-FLEET',active:true}],...overrides
   };
-  const calls={audit:[],detail:0,print:0};
-  const content={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html}};
-  const requestApi={requestDetail(id){calls.detail++;content.innerHTML=`<div id="legacy-detail">${id}</div>`;}};
-  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,setTimeout:fn=>fn(),uid:p=>`${p}-${Math.random().toString(36).slice(2,8)}`,now:()=> '2026-09-10T06:00:00.000Z',coName:id=>id==='C1'?'บริษัท เอ':'-',ouName:id=>id==='U1'?'หน่วยกลาง':'-',pAudit:(...a)=>calls.audit.push(a),esc:v=>String(v??''),money:v=>String(Number(v||0)),kv:(k,v)=>`<div>${k}:${v}</div>`,content,$:()=>null,$$:()=>[],toast:()=>{},formModal:()=>{},dialog:null,FileReader:function(){}};
+  const calls={audit:[],detail:0,print:0,observer:0};
+  let observerCallback=null;
+  class FakeMutationObserver{constructor(cb){observerCallback=cb;}observe(){calls.observer++;}}
+  const content={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html},querySelector(sel){if(sel==='#mrBack')return this.innerHTML.includes('id="mrBack"')?{}:null;if(sel==='#apdPanels')return this.innerHTML.includes('id="apdPanels"')?{}:null;return null;}};
+  const requestApi={requestDetail(id){calls.detail++;content.innerHTML=`<button id="mrBack">back</button><div id="legacy-detail">${id}</div>`;}};
+  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,setTimeout:fn=>fn(),uid:p=>`${p}-${Math.random().toString(36).slice(2,8)}`,now:()=> '2026-09-10T06:00:00.000Z',coName:id=>id==='C1'?'บริษัท เอ':'-',ouName:id=>id==='U1'?'หน่วยกลาง':'-',pAudit:(...a)=>calls.audit.push(a),esc:v=>String(v??''),money:v=>String(Number(v||0)),kv:(k,v)=>`<div>${k}:${v}</div>`,content,$:()=>null,$$:()=>[],toast:()=>{},formModal:()=>{},dialog:null,FileReader:function(){},MutationObserver:FakeMutationObserver};
   ctx.window=ctx;ctx.window.print=()=>{calls.print++};ctx.window.FLEET_MAINTENANCE_REQUEST_TEST=requestApi;
   vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-approval-document.js','utf8'),ctx);
-  return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST,prod:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API,content,requestApi};
+  return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST,prod:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API,content,requestApi,triggerMutation:()=>observerCallback?.([],{})};
 }
 
 test('generate v1 creates deterministic document and changes draft request to document_printed',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');assert.equal(d.version,1);assert.equal(d.documentNo,'MR-0001-v1');assert.equal(x.STATE.maintenanceRequests[0].status,'document_printed');assert.equal(x.STATE.generatedApprovalDocuments.length,1);});
@@ -40,7 +42,9 @@ test('permission enforcement is function-level and fail-closed for unauthorized 
 
 test('audit entities and actions are exact for generated document and external result',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',documentVersionId:d.id});assert.equal(x.calls.audit[0][1],'approvalDocument');assert.equal(x.calls.audit[1][1],'externalApprovalResult');assert.equal(x.calls.audit[0][0],'สร้างใบขออนุมัติซ่อม');assert.equal(x.calls.audit[1][0],'บันทึกผลอนุมัติจากภายนอก');});
 
-test('requestDetail wrapper calls original first and appends approval panels without replacing legacy detail',()=>{const x=load();x.requestApi.requestDetail('R1');assert.equal(x.calls.detail,1);assert.match(x.content.innerHTML,/legacy-detail/);assert.match(x.content.innerHTML,/เอกสารขออนุมัติซ่อม/);assert.match(x.content.innerHTML,/ผลอนุมัติจากภายนอก/);assert.equal(x.api.originalRequestDetail!==x.requestApi.requestDetail,true);});
+test('requestDetail wrapper calls original first and appends approval panels without replacing legacy detail',()=>{const x=load();x.requestApi.requestDetail('R1');assert.equal(x.calls.detail,1);assert.match(x.content.innerHTML,/legacy-detail/);assert.match(x.content.innerHTML,/เอกสารขออนุมัติซ่อม/);assert.match(x.content.innerHTML,/ผลอนุมัติจากภายนอก/);assert.match(x.content.innerHTML,/id="apdPanels"/);assert.equal(x.api.originalRequestDetail!==x.requestApi.requestDetail,true);});
+
+test('MutationObserver restores Batch 5 panels after closure-local detail DOM replacement',()=>{const x=load();x.requestApi.requestDetail('R1');assert.equal(x.api.getActiveRequestId(),'R1');assert.match(x.content.innerHTML,/id="apdPanels"/);x.content.innerHTML='<button id="mrBack">back</button><div id="legacy-detail">R1 after cancel</div>';assert.doesNotMatch(x.content.innerHTML,/id="apdPanels"/);x.triggerMutation();assert.match(x.content.innerHTML,/id="apdPanels"/);assert.match(x.content.innerHTML,/เอกสารขออนุมัติซ่อม/);assert.match(x.content.innerHTML,/ผลอนุมัติจากภายนอก/);assert.equal(x.calls.observer,1);});
 
 test('production API is separate from TEST API and exposes Batch 6 approval guard',()=>{const x=load();assert.notEqual(x.prod,x.api);assert.equal(typeof x.prod.hasApprovedResult,'function');assert.equal(typeof x.prod.docsForRequest,'function');assert.equal(typeof x.prod.resultForRequest,'function');});
 
