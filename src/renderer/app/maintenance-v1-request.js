@@ -68,7 +68,7 @@
   function statusLabel(s){return s==='cancelled'?'ยกเลิก':'ร่าง';}
   function urgencyLabel(s){return ({low:'ต่ำ',normal:'ปกติ',high:'สูง',critical:'เร่งด่วนมาก'})[s]||s||'-';}
   function typeLabel(s){return ({repair:'ซ่อม',inspection:'ตรวจสอบ',service:'บำรุงรักษา'})[s]||s||'-';}
-  function assetLabelFor(a){if(!a)return '-';return [a.code,a.plate].filter(Boolean).join(' · ')||'(ไม่มีรหัส/ทะเบียน)';}
+  function assetLabelFor(a){if(!a)return '-';return a.plate||a.code||'(ไม่มีทะเบียน)';}
   function meterWarningMessage(a,val){
     const raw=String(val??'').trim();
     return a&&raw!==''&&Number(raw)<Number(a.mileage||0)?`คำเตือน: มิเตอร์ที่กรอก (${raw}) ต่ำกว่ามิเตอร์ล่าสุดของทรัพย์สิน (${a.mileage||0}) — สามารถบันทึกได้แต่ควรตรวจสอบอีกครั้ง`:'';
