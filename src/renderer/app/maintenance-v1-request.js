@@ -68,7 +68,16 @@
   function statusLabel(s){return s==='cancelled'?'ยกเลิก':'ร่าง';}
   function urgencyLabel(s){return ({low:'ต่ำ',normal:'ปกติ',high:'สูง',critical:'เร่งด่วนมาก'})[s]||s||'-';}
   function typeLabel(s){return ({repair:'ซ่อม',inspection:'ตรวจสอบ',service:'บำรุงรักษา'})[s]||s||'-';}
-  function assetLabelFor(a){if(!a)return '-';return [a.code,a.plate].filter(Boolean).join(' · ')||a.id||'-';}
+  function assetLabelFor(a){if(!a)return '-';return [a.code,a.plate].filter(Boolean).join(' · ')||'(ไม่มีรหัส/ทะเบียน)';}
+  function meterWarningMessage(a,val){
+    const raw=String(val??'').trim();
+    return a&&raw!==''&&Number(raw)<Number(a.mileage||0)?`คำเตือน: มิเตอร์ที่กรอก (${raw}) ต่ำกว่ามิเตอร์ล่าสุดของทรัพย์สิน (${a.mileage||0}) — สามารถบันทึกได้แต่ควรตรวจสอบอีกครั้ง`:'';
+  }
+  function applyMeterWarning(warn,a,val){
+    const message=meterWarningMessage(a,val);
+    if(warn){warn.textContent=message;warn.classList?.toggle('warn-box',Boolean(message));}
+    return message;
+  }
 
   function validateVendor(id){
     const vendorId=String(id||'').trim();
@@ -210,8 +219,7 @@
       const draw=()=>{
         const a=assetById(assetSel?.value||'');
         if(info)info.innerHTML=a?`<b>${esc(assetLabelFor(a))}</b><span>${esc(a.brandName||'')} ${esc(a.modelName||'')} · มิเตอร์ล่าสุด ${esc(a.mileage??0)} ${a.meterUnit==='hour'?'ชม.':'กม.'}</span>`:'<span>เลือกทรัพย์สินเพื่อดูข้อมูล</span>';
-        const val=String(meter?.value??'').trim();
-        if(warn)warn.textContent=a&&val!==''&&Number(val)<Number(a.mileage||0)?`คำเตือน: มิเตอร์ที่กรอก (${val}) ต่ำกว่ามิเตอร์ล่าสุดของทรัพย์สิน (${a.mileage||0}) — สามารถบันทึกได้แต่ควรตรวจสอบอีกครั้ง`:'';
+        applyMeterWarning(warn,a,meter?.value);
       };
       if(assetSel)assetSel.onchange=draw;if(meter)meter.oninput=draw;draw();
     },0);
@@ -262,6 +270,7 @@
   window.FLEET_MAINTENANCE_REQUEST_TEST={
     ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
     canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,requestRegistry,
-    requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor
+    requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
+    meterWarningMessage,applyMeterWarning
   };
 })();
