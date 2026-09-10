@@ -198,7 +198,7 @@
     const overlay=document.createElement('div');overlay.id='apdViewerOverlay';overlay.className='v48-viewer';
     const actualMime=String(mime||dataMime(data)).toLowerCase();
     const isImg=actualMime.startsWith('image/')||/^data:image\//i.test(data);
-    const safeTitle=esc(title||'เอกสาร'),bodyHtml=html||(isImg?`<img src="${data}" alt="${safeTitle}">`:`<iframe src="${data}" title="${safeTitle}"></iframe>`);
+    const safeTitle=esc(title||'เอกสาร'),bodyHtml=html?`<div data-apd-html-scroll style="height:100%;overflow-y:auto;padding:2px 4px">${html}</div>`:(isImg?`<img src="${data}" alt="${safeTitle}">`:`<iframe src="${data}" title="${safeTitle}"></iframe>`);
     let downloadData=data,downloadName=fileName;
     if(html&&!downloadData){downloadData=`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>${title||'เอกสาร'}</title><link rel="stylesheet" href="styles.css"></head><body>${html}</body></html>`)}`;downloadName=downloadName||'approval-document.html';}
     if(downloadData&&!downloadName)downloadName=`returned-approval.${extensionForMime(actualMime||dataMime(downloadData))}`;
