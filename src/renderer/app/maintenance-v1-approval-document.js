@@ -111,7 +111,7 @@
     const documentVersion=validateDocumentVersion(requestId,String(p.documentVersionId||''));
     let attachmentId=old?.returnedApprovalAttachmentId||null;
     if(attachmentData?.fileRef){
-      const att={id:typeof uid==='function'?uid('RAA'):`RAA-${Date.now()}`,requestId,uploadedAt:typeof now==='function'?now():new Date().toISOString(),uploadedBy:actor(),fileRef:String(attachmentData.fileRef),note:String(attachmentData.note||p.attachmentNote||'')};
+      const att={id:typeof uid==='function'?uid('RAA'):`RAA-${Date.now()}`,requestId,uploadedAt:typeof now==='function'?now():new Date().toISOString(),uploadedBy:actor(),fileRef:String(attachmentData.fileRef),fileName:String(attachmentData.fileName||''),fileType:String(attachmentData.fileType||''),note:String(attachmentData.note||p.attachmentNote||'')};
       STATE.returnedApprovalAttachments.push(att);attachmentId=att.id;
     }
     const amountRaw=String(p.externalApprovedAmount??'').trim();
@@ -126,7 +126,7 @@
   function readReturnedApprovalFile(){
     const input=typeof dialog!=='undefined'&&dialog?.querySelector?dialog.querySelector('[name=returnedApprovalFile]'):null;
     const file=input?.files?.[0];if(!file)return Promise.resolve(null);
-    return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve({fileRef:String(fr.result||''),note:String(dialog?.querySelector?.('[name=attachmentNote]')?.value||'')});fr.onerror=()=>reject(fr.error||Error('อ่านไฟล์ไม่สำเร็จ'));fr.readAsDataURL(file);});
+    return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve({fileRef:String(fr.result||''),fileName:String(file.name||''),fileType:String(file.type||''),note:String(dialog?.querySelector?.('[name=attachmentNote]')?.value||'')});fr.onerror=()=>reject(fr.error||Error('อ่านไฟล์ไม่สำเร็จ'));fr.readAsDataURL(file);});
   }
 
   function decisionLabel(v){return ({approved:'อนุมัติ',rejected:'ไม่อนุมัติ',conditional:'อนุมัติแบบมีเงื่อนไข'})[v]||v||'-';}
@@ -139,7 +139,7 @@
     let resultHtml;
     if(result){
       const att=STATE.returnedApprovalAttachments.find(x=>x&&x.id===result.returnedApprovalAttachmentId);
-      const attachmentHtml=att?.fileRef?`<a class="btn sm" href="${esc(att.fileRef)}" target="_blank" rel="noopener">เปิดไฟล์</a>`:'ไม่มี';
+      const attachmentHtml=att?.fileRef?`<button class="btn sm" type="button" data-apd-returned-attachment="${esc(att.id)}">เปิดไฟล์</button>`:'ไม่มี';
       resultHtml=`<div class="grid3">${kv('ผล',decisionLabel(result.externalDecision))}${kv('ผู้อนุมัติ',result.externalApprovedBy||'-')}${kv('วันที่',result.externalApprovedAt||'-')}${kv('วงเงิน',result.externalApprovedAmount==null?'-':`฿${money(result.externalApprovedAmount)}`)}${kv('เอกสารที่ใช้',docs.find(d=>d.id===result.documentVersionId)?.documentNo||'-')}<div><b>ไฟล์แนบกลับ</b><br>${attachmentHtml}</div></div><h4>หมายเหตุ</h4><p>${esc(result.externalApprovalNote||'-')}</p>${manage&&!hasLinkedWorkOrder(requestId)?'<button class="btn" id="apdEditResult">แก้ไขผลอนุมัติ</button>':''}`;
     }else resultHtml=request.status==='document_printed'&&manage?'<button class="btn primary" id="apdRecordResult">บันทึกผลอนุมัติจากภายนอก</button>':'<div class="empty">ยังไม่มีผลอนุมัติจากภายนอก</div>';
     return `<div id="apdPanels"><div class="panel"><div class="toolbar"><div><h3>เอกสารขออนุมัติซ่อม</h3><div class="muted">สร้างเอกสารเพื่อพิมพ์และนำไปอนุมัติภายนอกระบบ</div></div>${createButton}</div>${versions}</div><div class="panel"><h3>ผลอนุมัติจากภายนอก</h3>${resultHtml}</div></div>`;
@@ -155,13 +155,35 @@
     return `<div class="print-sheet"><h2>ใบขออนุมัติซ่อม</h2><div class="print-grid"><div><b>เลขที่เอกสาร</b><br>${esc(doc.documentNo)}</div><div><b>วันที่พิมพ์</b><br>${esc(String(doc.generatedAt||'').slice(0,10))}</div></div><h3>A. คำขอ</h3><div class="print-grid"><div>เลขที่คำขอ: ${esc(r.requestNo||'-')}</div><div>วันที่: ${esc(r.requestDate||'-')}</div><div>ผู้แจ้ง: ${esc(r.requesterNameSnapshot||'-')}</div><div>หน่วยงาน: ${esc(a.unitName||'-')}</div><div>ความเร่งด่วน: ${esc(r.urgency||'-')}</div><div>อาการ/เหตุผล: ${esc(r.issue||'-')}</div></div><h3>B. ทรัพย์สิน</h3><div class="print-grid"><div>รหัส: ${esc(a.code||'-')}</div><div>ทะเบียน: ${esc(a.plate||'-')}</div><div>ยี่ห้อ/รุ่น: ${esc(`${a.brandName||''} ${a.modelName||''}`.trim()||'-')}</div><div>ปี: ${esc(a.modelYear||'-')}</div><div>เลขไมล์ล่าสุด: ${esc(a.mileage===''?'-':a.mileage)} ${esc(a.meterUnit||'')}</div><div>บริษัท: ${esc(a.companyName||'-')}</div><div>หน่วยดูแล: ${esc(a.unitName||'-')}</div></div><h3>C. ข้อเสนอซ่อม</h3><div class="print-grid"><div>คำอธิบาย: ${esc(r.issue||'-')}</div><div>ผู้ให้บริการที่เสนอ: ${esc(p.vendorNameSnapshot||'-')}</div><div>ติดต่อ: ${esc(p.vendorContact||'-')}</div><div>ประมาณการ: ${money(p.estimatedCost)} บาท</div></div><h3>D. ประวัติการซ่อม</h3>${repairHistoryPrintHtml(h)}<h3>E. ผลอนุมัติภายนอก</h3><div class="sign"><div>□ อนุมัติ<br>□ ไม่อนุมัติ<br>□ อนุมัติแบบมีเงื่อนไข<br><br>วงเงินที่อนุมัติ ____________________<br>หมายเหตุ __________________________</div><div>ผู้อนุมัติ __________________________<br>วันที่ ______________________________<br><br>ลายเซ็น ____________________________</div></div></div>`;
   }
 
+  function dataMime(data){const m=String(data||'').match(/^data:([^;,]+)/i);return String(m?.[1]||'').toLowerCase();}
+  function extensionForMime(mime){return ({'application/pdf':'pdf','image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/gif':'gif','image/webp':'webp'})[mime]||'bin';}
+  function closeViewer(){const old=typeof document!=='undefined'?document.querySelector?.('#apdViewerOverlay'):null;if(old?.remove)old.remove();}
+  function openViewer({title='เอกสาร',data='',mime='',fileName='',html=''}){
+    if(typeof document==='undefined'||!document?.createElement||!document?.body?.appendChild)throw Error('ไม่สามารถเปิดตัวแสดงเอกสารได้');
+    closeViewer();
+    const overlay=document.createElement('div');overlay.id='apdViewerOverlay';overlay.className='v48-viewer';
+    const actualMime=String(mime||dataMime(data)).toLowerCase();
+    const isImg=actualMime.startsWith('image/')||/^data:image\//i.test(data);
+    const safeTitle=esc(title||'เอกสาร'),bodyHtml=html|| (isImg?`<img src="${data}" alt="${safeTitle}">`:`<iframe src="${data}" title="${safeTitle}"></iframe>`);
+    let downloadData=data,downloadName=fileName;
+    if(html&&!downloadData){downloadData=`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>${title||'เอกสาร'}</title><link rel="stylesheet" href="styles.css"></head><body>${html}</body></html>`)}`;downloadName=downloadName||'approval-document.html';}
+    if(downloadData&&!downloadName)downloadName=`returned-approval.${extensionForMime(actualMime||dataMime(downloadData))}`;
+    overlay.innerHTML=`<div class="v48-viewer-card"><div class="v48-viewer-head"><div><b>${safeTitle}</b><small>${html?'เอกสารขออนุมัติซ่อม':'ไฟล์แนบผลอนุมัติจากภายนอก'}</small></div><button type="button" data-apd-viewer-close>×</button></div><div class="v48-viewer-body">${bodyHtml}</div><div class="v48-viewer-foot">${downloadData?`<a class="btn" href="${downloadData}" download="${esc(downloadName)}">ดาวน์โหลดไฟล์</a>`:''}<button type="button" class="btn primary" data-apd-viewer-close>ปิด</button></div></div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelectorAll?.('[data-apd-viewer-close]').forEach(b=>b.onclick=()=>overlay.remove());
+    overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
+    return overlay;
+  }
+
+  function viewReturnedAttachmentById(attachmentId){
+    ensureApprovalState();const att=STATE.returnedApprovalAttachments.find(x=>x&&x.id===attachmentId);if(!att?.fileRef)throw Error('ไม่พบไฟล์แนบกลับ');
+    const mime=String(att.fileType||dataMime(att.fileRef)).toLowerCase();
+    return openViewer({title:att.fileName||'ไฟล์แนบผลอนุมัติ',data:att.fileRef,mime,fileName:att.fileName||`returned-approval.${extensionForMime(mime)}`});
+  }
+
   function viewDocument(doc){
     if(!doc)throw Error('ไม่พบเอกสาร');
-    const w=typeof window.open==='function'?window.open('','_blank'):null;
-    if(!w||!w.document?.write)throw Error('ไม่สามารถเปิดหน้าดูเอกสารได้');
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(doc.documentNo||'ใบขออนุมัติซ่อม')}</title><link rel="stylesheet" href="styles.css"></head><body>${printSheetHtml(doc)}</body></html>`);
-    if(typeof w.document.close==='function')w.document.close();
-    return w;
+    return openViewer({title:doc.documentNo||'ใบขออนุมัติซ่อม',html:printSheetHtml(doc),fileName:`${doc.documentNo||'approval-document'}.html`});
   }
   function viewDocumentById(documentId){ensureApprovalState();return viewDocument(STATE.generatedApprovalDocuments.find(x=>x&&x.id===documentId));}
 
@@ -193,6 +215,7 @@
     if($('#apdGenerate'))$('#apdGenerate').onclick=()=>{try{generateAndPrint(requestId)}catch(e){toast(e.message||String(e),true)}};
     $$('[data-apd-view]').forEach(b=>b.onclick=()=>{try{viewDocumentById(b.dataset.apdView)}catch(e){toast(e.message||String(e),true)}});
     $$('[data-apd-reprint]').forEach(b=>b.onclick=()=>{try{const d=STATE.generatedApprovalDocuments.find(x=>x.id===b.dataset.apdReprint);printDocument(d)}catch(e){toast(e.message||String(e),true)}});
+    $$('[data-apd-returned-attachment]').forEach(b=>b.onclick=()=>{try{viewReturnedAttachmentById(b.dataset.apdReturnedAttachment)}catch(e){toast(e.message||String(e),true)}});
     if($('#apdRecordResult'))$('#apdRecordResult').onclick=()=>resultForm(requestId);
     if($('#apdEditResult'))$('#apdEditResult').onclick=()=>resultForm(requestId);
   }
@@ -230,5 +253,5 @@
   if(typeof document!=='undefined'&&document?.addEventListener){document.addEventListener('click',e=>{const t=e.target;if(t?.closest?.('[data-mr-edit],[data-mr-cancel]'))return;const row=t?.closest?.('[data-mr-row]');if(!row)return;e.preventDefault?.();e.stopImmediatePropagation?.();wrappedRequestDetail(row.dataset.mrRow);},true);}
 
   window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API={hasApprovedResult,resultForRequest,docsForRequest};
-  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest,appendApprovalPanels,restoreApprovalPanelsIfNeeded,approvalObserver,getActiveRequestId:()=>activeRequestId,viewDocument,viewDocumentById,resultForm};
+  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest,appendApprovalPanels,restoreApprovalPanelsIfNeeded,approvalObserver,getActiveRequestId:()=>activeRequestId,viewDocument,viewDocumentById,resultForm,openViewer,closeViewer,viewReturnedAttachmentById,dataMime,extensionForMime};
 })();
