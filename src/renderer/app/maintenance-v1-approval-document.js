@@ -111,7 +111,7 @@
     const documentVersion=validateDocumentVersion(requestId,String(p.documentVersionId||''));
     let attachmentId=old?.returnedApprovalAttachmentId||null;
     if(attachmentData?.fileRef){
-      const att={id:typeof uid==='function'?uid('RAA'):`RAA-${Date.now()}`,requestId,uploadedAt:typeof now==='function'?now():new Date().toISOString(),uploadedBy:actor(),fileRef:String(attachmentData.fileRef),fileName:String(attachmentData.fileName||''),fileType:String(attachmentData.fileType||''),note:String(attachmentData.note||p.attachmentNote||'')};
+      const att={id:typeof uid==='function'?uid('RAA'):`RAA-${Date.now()}`,requestId,uploadedAt:typeof now==='function'?now():new Date().toISOString(),uploadedBy:actor(),fileRef:String(attachmentData.fileRef),note:String(attachmentData.note||p.attachmentNote||'')};
       STATE.returnedApprovalAttachments.push(att);attachmentId=att.id;
     }
     const amountRaw=String(p.externalApprovedAmount??'').trim();
@@ -126,7 +126,7 @@
   function readReturnedApprovalFile(){
     const input=typeof dialog!=='undefined'&&dialog?.querySelector?dialog.querySelector('[name=returnedApprovalFile]'):null;
     const file=input?.files?.[0];if(!file)return Promise.resolve(null);
-    return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve({fileRef:String(fr.result||''),fileName:String(file.name||''),fileType:String(file.type||''),note:String(dialog?.querySelector?.('[name=attachmentNote]')?.value||'')});fr.onerror=()=>reject(fr.error||Error('อ่านไฟล์ไม่สำเร็จ'));fr.readAsDataURL(file);});
+    return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve({fileRef:String(fr.result||''),note:String(dialog?.querySelector?.('[name=attachmentNote]')?.value||'')});fr.onerror=()=>reject(fr.error||Error('อ่านไฟล์ไม่สำเร็จ'));fr.readAsDataURL(file);});
   }
 
   function decisionLabel(v){return ({approved:'อนุมัติ',rejected:'ไม่อนุมัติ',conditional:'อนุมัติแบบมีเงื่อนไข'})[v]||v||'-';}
@@ -164,7 +164,7 @@
     const overlay=document.createElement('div');overlay.id='apdViewerOverlay';overlay.className='v48-viewer';
     const actualMime=String(mime||dataMime(data)).toLowerCase();
     const isImg=actualMime.startsWith('image/')||/^data:image\//i.test(data);
-    const safeTitle=esc(title||'เอกสาร'),bodyHtml=html|| (isImg?`<img src="${data}" alt="${safeTitle}">`:`<iframe src="${data}" title="${safeTitle}"></iframe>`);
+    const safeTitle=esc(title||'เอกสาร'),bodyHtml=html||(isImg?`<img src="${data}" alt="${safeTitle}">`:`<iframe src="${data}" title="${safeTitle}"></iframe>`);
     let downloadData=data,downloadName=fileName;
     if(html&&!downloadData){downloadData=`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>${title||'เอกสาร'}</title><link rel="stylesheet" href="styles.css"></head><body>${html}</body></html>`)}`;downloadName=downloadName||'approval-document.html';}
     if(downloadData&&!downloadName)downloadName=`returned-approval.${extensionForMime(actualMime||dataMime(downloadData))}`;
@@ -177,8 +177,8 @@
 
   function viewReturnedAttachmentById(attachmentId){
     ensureApprovalState();const att=STATE.returnedApprovalAttachments.find(x=>x&&x.id===attachmentId);if(!att?.fileRef)throw Error('ไม่พบไฟล์แนบกลับ');
-    const mime=String(att.fileType||dataMime(att.fileRef)).toLowerCase();
-    return openViewer({title:att.fileName||'ไฟล์แนบผลอนุมัติ',data:att.fileRef,mime,fileName:att.fileName||`returned-approval.${extensionForMime(mime)}`});
+    const mime=dataMime(att.fileRef);
+    return openViewer({title:'ไฟล์แนบผลอนุมัติ',data:att.fileRef,mime,fileName:`returned-approval.${extensionForMime(mime)}`});
   }
 
   function viewDocument(doc){
