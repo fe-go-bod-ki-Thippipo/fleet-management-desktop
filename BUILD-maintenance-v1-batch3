@@ -2,3 +2,4 @@ Maintenance v1 Batch 3 — Legacy WorkOrder Migration
 Rebased onto main bb9066b0 with Batch 1/2/4 integration preserved.
 Data-only additive migration from STATE.maintenance to STATE.workOrders.
 Preserves legacy maintenance records and locked Asset/Document baseline.
+Windows validation trigger after rebase integration.
