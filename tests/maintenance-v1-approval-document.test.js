@@ -1,0 +1,49 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
+
+function load(role='admin',overrides={}){
+  const STATE={
+    maintenanceRequests:[{id:'R1',requestNo:'MR-0001',assetId:'A1',requestDate:'2026-09-10',requesterNameSnapshot:'สมชาย',urgency:'high',issue:'เบรกมีเสียง',requestNote:'ตรวจด่วน',proposedVendorId:'V1',proposedVendorNameSnapshot:'อู่ เอ',estimatedCost:2500,status:'draft',updatedAt:'',updatedBy:''}],
+    assets:[{id:'A1',code:'FL-001',plate:'กก 1111',brandName:'Toyota',modelName:'Hilux',modelYear:2022,mileage:50000,meterUnit:'km',companyId:'C1',managingOperatingUnitId:'U1',deleted:false}],
+    vendors:[{id:'V1',name:'อู่ เอ',contactName:'ช่างเอก',phone:'0812345678'}],
+    workOrders:[],repairItems:[],partItems:[],labourItems:[],vendorDispatches:[],externalServiceCosts:[],generatedApprovalDocuments:[],returnedApprovalAttachments:[],externalApprovalResults:[],userAccounts:[{role:'admin',personId:'P-ADMIN',active:true},{role:'manager',personId:'P-MGR',active:true},{role:'fleetOfficer',personId:'P-FLEET',active:true}],...overrides
+  };
+  const calls={audit:[],detail:0,print:0};
+  const content={innerHTML:'',insertAdjacentHTML(_where,html){this.innerHTML+=html}};
+  const requestApi={requestDetail(id){calls.detail++;content.innerHTML=`<div id="legacy-detail">${id}</div>`;}};
+  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,setTimeout:fn=>fn(),uid:p=>`${p}-${Math.random().toString(36).slice(2,8)}`,now:()=> '2026-09-10T06:00:00.000Z',coName:id=>id==='C1'?'บริษัท เอ':'-',ouName:id=>id==='U1'?'หน่วยกลาง':'-',pAudit:(...a)=>calls.audit.push(a),esc:v=>String(v??''),money:v=>String(Number(v||0)),kv:(k,v)=>`<div>${k}:${v}</div>`,content,$:()=>null,$$:()=>[],toast:()=>{},formModal:()=>{},dialog:null,FileReader:function(){}};
+  ctx.window=ctx;ctx.window.print=()=>{calls.print++};ctx.window.FLEET_MAINTENANCE_REQUEST_TEST=requestApi;
+  vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-approval-document.js','utf8'),ctx);
+  return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST,prod:ctx.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API,content,requestApi};
+}
+
+test('generate v1 creates deterministic document and changes draft request to document_printed',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');assert.equal(d.version,1);assert.equal(d.documentNo,'MR-0001-v1');assert.equal(x.STATE.maintenanceRequests[0].status,'document_printed');assert.equal(x.STATE.generatedApprovalDocuments.length,1);});
+
+test('snapshot captures request asset proposal and repair history values',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');assert.equal(d.snapshotData.request.issue,'เบรกมีเสียง');assert.equal(d.snapshotData.asset.plate,'กก 1111');assert.equal(d.snapshotData.asset.companyName,'บริษัท เอ');assert.equal(d.snapshotData.proposal.vendorContact,'ช่างเอก · 0812345678');assert.deepEqual(JSON.parse(JSON.stringify(d.snapshotData.repairHistory)),{last12MonthCount:0,last12MonthTotal:0,latest5:[]});});
+
+test('generate v2 supersedes v1 and does not overwrite existing snapshot',()=>{const x=load();const d1=x.api.generateApprovalDocument('R1');x.STATE.maintenanceRequests[0].issue='ข้อมูลใหม่';const d2=x.api.generateApprovalDocument('R1');assert.equal(d1.superseded,true);assert.equal(d2.version,2);assert.equal(d2.superseded,false);assert.equal(d1.snapshotData.request.issue,'เบรกมีเสียง');assert.equal(d2.snapshotData.request.issue,'ข้อมูลใหม่');assert.equal(x.STATE.maintenanceRequests[0].status,'document_printed');});
+
+test('old generated snapshot is deeply frozen during runtime',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');assert.equal(Object.isFrozen(d.snapshotData),true);assert.equal(Object.isFrozen(d.snapshotData.request),true);});
+
+test('repair history filters closed only sorts newest first limits latest5 and sums last 12 months',()=>{const workOrders=[],repairItems=[],labourItems=[];for(let i=0;i<7;i++){workOrders.push({id:`W${i}`,assetId:'A1',status:'closed',closedAt:`2026-0${9-i}-01T00:00:00.000Z`,odometerAtOpen:50000-i*100});repairItems.push({workOrderId:`W${i}`,description:`งาน ${i}`});labourItems.push({workOrderId:`W${i}`,lineTotal:100+i});}workOrders.push({id:'OPEN',assetId:'A1',status:'open',closedAt:'2026-09-09T00:00:00.000Z'});const x=load('admin',{workOrders,repairItems,labourItems});const h=x.api.repairHistory(x.STATE.assets[0]);assert.equal(h.latest5.length,5);assert.equal(h.latest5[0].description,'งาน 0');assert.equal(h.last12MonthCount,7);assert.equal(h.last12MonthTotal,721);});
+
+test('no repair history renders explicit no-history message and no empty table',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');const html=x.api.printSheetHtml(d);assert.match(html,/ไม่มีประวัติการซ่อมก่อนหน้า/);assert.doesNotMatch(x.api.repairHistoryPrintHtml(d.snapshotData.repairHistory),/<table>/);});
+
+test('initial external result is blocked before document_printed',()=>{const x=load();assert.throws(()=>x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',documentVersionId:'X'}),/ต้องพิมพ์ใบขออนุมัติก่อน/);});
+
+test('external approved result changes request status to approved and records selected document version',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');const r=x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',externalApprovedBy:'ผจก.',externalApprovedAt:'2026-09-10',externalApprovedAmount:'2000.50',externalApprovalNote:'ตกลง',documentVersionId:d.id});assert.equal(r.externalApprovedAmount,2000.5);assert.equal(r.documentVersionId,d.id);assert.equal(x.STATE.maintenanceRequests[0].status,'approved');});
+
+test('rejected maps request status to rejected while conditional maps to approved',()=>{const a=load();const da=a.api.generateApprovalDocument('R1');a.api.saveExternalApprovalResult('R1',{externalDecision:'rejected',documentVersionId:da.id});assert.equal(a.STATE.maintenanceRequests[0].status,'rejected');const b=load();const db=b.api.generateApprovalDocument('R1');b.api.saveExternalApprovalResult('R1',{externalDecision:'conditional',externalApprovalNote:'ไม่เกิน 3000',documentVersionId:db.id});assert.equal(b.STATE.maintenanceRequests[0].status,'approved');assert.equal(b.prod.hasApprovedResult('R1'),true);});
+
+test('editing external result is audited but blocked after linked WorkOrder exists',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');const r=x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',documentVersionId:d.id});const a1=x.calls.audit.length;x.api.saveExternalApprovalResult('R1',{externalDecision:'conditional',documentVersionId:d.id,externalApprovalNote:'มีเงื่อนไข'});assert.equal(x.calls.audit.length,a1+1);assert.equal(x.calls.audit.at(-1)[0],'แก้ไขผลอนุมัติจากภายนอก');x.STATE.workOrders.push({id:'W1',sourceRequestId:'R1',status:'open'});assert.throws(()=>x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',documentVersionId:d.id}),/หลังสร้าง Work Order/);assert.equal(r.id,x.STATE.externalApprovalResults[0].id);});
+
+test('permission enforcement is function-level and fail-closed for unauthorized and unknown roles',()=>{for(const role of ['requester','clerk','viewer','unknown','']){const x=load(role);assert.equal(x.api.canManage(),false);assert.throws(()=>x.api.generateApprovalDocument('R1'),/ไม่มีสิทธิ์/);assert.throws(()=>x.api.saveExternalApprovalResult('R1',{}),/ไม่มีสิทธิ์/);}for(const role of ['admin','manager','fleetOfficer'])assert.equal(load(role).api.canManage(),true);});
+
+test('audit entities and actions are exact for generated document and external result',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');x.api.saveExternalApprovalResult('R1',{externalDecision:'approved',documentVersionId:d.id});assert.equal(x.calls.audit[0][1],'approvalDocument');assert.equal(x.calls.audit[1][1],'externalApprovalResult');assert.equal(x.calls.audit[0][0],'สร้างใบขออนุมัติซ่อม');assert.equal(x.calls.audit[1][0],'บันทึกผลอนุมัติจากภายนอก');});
+
+test('requestDetail wrapper calls original first and appends approval panels without replacing legacy detail',()=>{const x=load();x.requestApi.requestDetail('R1');assert.equal(x.calls.detail,1);assert.match(x.content.innerHTML,/legacy-detail/);assert.match(x.content.innerHTML,/เอกสารขออนุมัติซ่อม/);assert.match(x.content.innerHTML,/ผลอนุมัติจากภายนอก/);assert.equal(x.api.originalRequestDetail!==x.requestApi.requestDetail,true);});
+
+test('production API is separate from TEST API and exposes Batch 6 approval guard',()=>{const x=load();assert.notEqual(x.prod,x.api);assert.equal(typeof x.prod.hasApprovedResult,'function');assert.equal(typeof x.prod.docsForRequest,'function');assert.equal(typeof x.prod.resultForRequest,'function');});
+
+test('print document contains all five sections and external signature choices',()=>{const x=load();const d=x.api.generateApprovalDocument('R1');const html=x.api.printSheetHtml(d);for(const s of ['A. คำขอ','B. ทรัพย์สิน','C. ข้อเสนอซ่อม','D. ประวัติการซ่อม','E. ผลอนุมัติภายนอก'])assert.match(html,new RegExp(s.replace('.','\\.')));assert.match(html,/□ อนุมัติ/);assert.match(html,/□ ไม่อนุมัติ/);assert.match(html,/□ อนุมัติแบบมีเงื่อนไข/);});
+
+test('index loads approval document after asset integration and before parity baseline without modifying locked modules',()=>{const index=fs.readFileSync('index.html','utf8');assert.match(index,/maintenance-v1-asset-integration\.js[\s\S]*maintenance-v1-approval-document\.js[\s\S]*parity-baseline\.js/);const src=fs.readFileSync('src/renderer/app/maintenance-v1-approval-document.js','utf8');assert.doesNotMatch(src,/assetProfile\s*=|documentPage\s*=|assetDocumentDetail\s*=|assetForm\s*=/);});
