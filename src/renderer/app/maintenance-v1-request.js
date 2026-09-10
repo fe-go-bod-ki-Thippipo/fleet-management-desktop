@@ -65,7 +65,7 @@
     const yes=hasWorkOrder(request);
     return `<span class="pill ${yes?'ok':'warn'}">${yes?'มีแล้ว':'ยังไม่มี'}</span>`;
   }
-  function statusLabel(s){return s==='cancelled'?'ยกเลิก':'ร่าง';}
+  function statusLabel(s){return ({draft:'ร่าง',document_printed:'พิมพ์เอกสารแล้ว',approved:'อนุมัติ',rejected:'ไม่อนุมัติ',cancelled:'ยกเลิก'})[s]||s||'-';}
   function urgencyLabel(s){return ({low:'ต่ำ',normal:'ปกติ',high:'สูง',critical:'เร่งด่วนมาก'})[s]||s||'-';}
   function typeLabel(s){return ({repair:'ซ่อม',inspection:'ตรวจสอบ',service:'บำรุงรักษา'})[s]||s||'-';}
   function assetLabelFor(a){if(!a)return '-';return a.plate||a.code||'(ไม่มีทะเบียน)';}
@@ -152,7 +152,7 @@
     if(!canEdit())throw Error('บทบาทนี้ไม่มีสิทธิ์แก้ไขคำขอซ่อม');
     ensureRequestState();
     const x=STATE.maintenanceRequests.find(r=>r&&r.id===id);if(!x)throw Error('ไม่พบคำขอซ่อม');
-    if(x.status!=='draft')throw Error('แก้ไขได้เฉพาะคำขอที่เป็นร่าง');
+    if(!['draft','document_printed'].includes(x.status))throw Error('แก้ไขได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น');
     const before=structuredClone(x),payload=buildRequestPayload(p,x,extraAttachments);
     Object.assign(x,payload,{updatedAt:now(),updatedBy:actor()});
     audit('แก้ไขคำขอซ่อม',x.id,before,structuredClone(x));
@@ -185,7 +185,7 @@
     ensureRequestState();
     const old=id?STATE.maintenanceRequests.find(r=>r&&r.id===id):null;
     if(id&&!old)return toast('ไม่พบคำขอซ่อม',true);
-    if(old&&old.status!=='draft')return toast('แก้ไขได้เฉพาะคำขอที่เป็นร่าง',true);
+    if(old&&!['draft','document_printed'].includes(old.status))return toast('แก้ไขได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น',true);
     const ownPerson=role()==='requester'?actorPersonId():'';
     const requesterId=ownPerson||old?.requesterId||'';
     const requesterName=ownPerson?(personById(ownPerson)?.name||old?.requesterNameSnapshot||''):(old?.requesterId?'':old?.requesterNameSnapshot||'');
@@ -235,7 +235,7 @@
     if(q)rows=rows.filter(r=>{const a=assetById(r.assetId);return norm(`${r.requestNo} ${r.requestDate} ${assetLabelFor(a)} ${r.requesterNameSnapshot} ${r.issue} ${r.proposedVendorNameSnapshot}`).includes(q)});
     const pages=Math.max(1,Math.ceil(rows.length/requestPageSize));requestPage=Math.min(Math.max(1,requestPage),pages);
     const start=(requestPage-1)*requestPageSize,show=rows.slice(start,start+requestPageSize);
-    box.innerHTML=show.length?`<table><thead><tr><th>เลขที่คำขอ</th><th>วันที่</th><th>ทรัพย์สิน-ทะเบียน</th><th>ผู้แจ้ง</th><th>อาการ</th><th>ความเร่งด่วน</th><th>อู่ที่เสนอ</th><th>ประมาณการ</th><th>สถานะ</th><th>มี Work Order แล้วหรือไม่</th><th>จัดการ</th></tr></thead><tbody>${show.map(r=>`<tr data-mr-row="${esc(r.id)}"><td><b>${esc(r.requestNo)}</b></td><td>${esc(r.requestDate||'-')}</td><td>${esc(assetLabelFor(assetById(r.assetId)))}</td><td>${esc(r.requesterNameSnapshot||'-')}</td><td>${esc(r.issue||'-')}</td><td>${esc(urgencyLabel(r.urgency))}</td><td>${esc(r.proposedVendorNameSnapshot||'-')}</td><td>${money(r.estimatedCost)}</td><td>${pill(r.status)} ${esc(statusLabel(r.status))}</td><td>${workOrderBadge(r)}</td><td>${canEdit()&&r.status==='draft'?`<button class="btn sm" data-mr-edit="${esc(r.id)}">แก้ไข</button>`:''}${canCancel()&&r.status==='draft'?` <button class="btn sm" data-mr-cancel="${esc(r.id)}">ยกเลิก</button>`:''}</td></tr>`).join('')}</tbody></table><div class="toolbar"><span class="muted">${rows.length} รายการ · หน้า ${requestPage}/${pages}</span><div><button class="btn sm" id="mrPrev" ${requestPage<=1?'disabled':''}>← ก่อนหน้า</button> <button class="btn sm" id="mrNext" ${requestPage>=pages?'disabled':''}>ถัดไป →</button></div></div>`:'<div class="empty">ยังไม่มีคำขอซ่อม</div>';
+    box.innerHTML=show.length?`<table><thead><tr><th>เลขที่คำขอ</th><th>วันที่</th><th>ทรัพย์สิน-ทะเบียน</th><th>ผู้แจ้ง</th><th>อาการ</th><th>ความเร่งด่วน</th><th>อู่ที่เสนอ</th><th>ประมาณการ</th><th>สถานะ</th><th>มี Work Order แล้วหรือไม่</th><th>จัดการ</th></tr></thead><tbody>${show.map(r=>`<tr data-mr-row="${esc(r.id)}"><td><b>${esc(r.requestNo)}</b></td><td>${esc(r.requestDate||'-')}</td><td>${esc(assetLabelFor(assetById(r.assetId)))}</td><td>${esc(r.requesterNameSnapshot||'-')}</td><td>${esc(r.issue||'-')}</td><td>${esc(urgencyLabel(r.urgency))}</td><td>${esc(r.proposedVendorNameSnapshot||'-')}</td><td>${money(r.estimatedCost)}</td><td>${pill(r.status)} ${esc(statusLabel(r.status))}</td><td>${workOrderBadge(r)}</td><td>${canEdit()&&['draft','document_printed'].includes(r.status)?`<button class="btn sm" data-mr-edit="${esc(r.id)}">แก้ไข</button>`:''}${canCancel()&&r.status==='draft'?` <button class="btn sm" data-mr-cancel="${esc(r.id)}">ยกเลิก</button>`:''}</td></tr>`).join('')}</tbody></table><div class="toolbar"><span class="muted">${rows.length} รายการ · หน้า ${requestPage}/${pages}</span><div><button class="btn sm" id="mrPrev" ${requestPage<=1?'disabled':''}>← ก่อนหน้า</button> <button class="btn sm" id="mrNext" ${requestPage>=pages?'disabled':''}>ถัดไป →</button></div></div>`:'<div class="empty">ยังไม่มีคำขอซ่อม</div>';
     $$('[data-mr-row]').forEach(r=>r.onclick=()=>requestDetail(r.dataset.mrRow));
     $$('[data-mr-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();requestForm(b.dataset.mrEdit)});
     $$('[data-mr-cancel]').forEach(b=>b.onclick=e=>{e.stopPropagation();try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(b.dataset.mrCancel);renderRequestRows();toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}});
@@ -261,7 +261,7 @@
     ensureRequestState();const r=STATE.maintenanceRequests.find(x=>x&&x.id===id);if(!r)return requestRegistry();
     const a=assetById(r.assetId),wos=(STATE.workOrders||[]).filter(wo=>wo&&wo.sourceRequestId===r.id),logs=STATE.audit.filter(x=>x&&x.entity==='maintenanceRequest'&&x.recordId===r.id);
     setHead(r.requestNo,'Maintenance Request Detail');
-    content.innerHTML=`<div class="panel"><div class="toolbar"><button class="btn" id="mrBack">← กลับทะเบียน</button><div>${canEdit()&&r.status==='draft'?'<button class="btn" id="mrEdit">แก้ไข</button>':''}${canCancel()&&r.status==='draft'?' <button class="btn" id="mrCancel">ยกเลิกคำขอ</button>':''}</div></div><div class="hero-info">${kv('เลขที่คำขอ',r.requestNo)}${kv('ทรัพย์สิน',assetLabelFor(a))}${kv('สถานะ',statusLabel(r.status))}${kv('ความเร่งด่วน',urgencyLabel(r.urgency))}${kv('ประมาณการ',`฿${money(r.estimatedCost)}`)}${kv('Work Order',hasWorkOrder(r)?'มีแล้ว':'ยังไม่มี')}</div></div>
+    content.innerHTML=`<div class="panel"><div class="toolbar"><button class="btn" id="mrBack">← กลับทะเบียน</button><div>${canEdit()&&['draft','document_printed'].includes(r.status)?'<button class="btn" id="mrEdit">แก้ไข</button>':''}${canCancel()&&r.status==='draft'?' <button class="btn" id="mrCancel">ยกเลิกคำขอ</button>':''}</div></div><div class="hero-info">${kv('เลขที่คำขอ',r.requestNo)}${kv('ทรัพย์สิน',assetLabelFor(a))}${kv('สถานะ',statusLabel(r.status))}${kv('ความเร่งด่วน',urgencyLabel(r.urgency))}${kv('ประมาณการ',`฿${money(r.estimatedCost)}`)}${kv('Work Order',hasWorkOrder(r)?'มีแล้ว':'ยังไม่มี')}</div></div>
       <div class="grid2"><div class="panel"><h3>ข้อมูลคำขอ</h3><div class="grid3">${kv('วันที่แจ้ง',r.requestDate)}${kv('ผู้แจ้ง',r.requesterNameSnapshot)}${kv('ประเภทงาน',typeLabel(r.maintenanceType))}${kv('มิเตอร์',r.meterValue===''?'-':r.meterValue)}${kv('อู่ที่เสนอ',r.proposedVendorNameSnapshot||'-')}${kv('ประมาณการ',money(r.estimatedCost))}</div><h4>ปัญหา/อาการ</h4><p>${esc(r.issue||'-')}</p><h4>หมายเหตุ</h4><p>${esc(r.requestNote||'-')}</p></div><div class="panel"><h3>ไฟล์ / รูป</h3><div class="thumb-row">${(r.attachments||[]).map(attachmentHtml).join('')||'<div class="empty">ยังไม่มีไฟล์แนบ</div>'}</div></div></div>
       <div class="grid2"><div class="panel"><h3>งานซ่อมที่เกี่ยวข้อง</h3>${wos.length?`<table><thead><tr><th>เลขที่</th><th>สถานะ</th></tr></thead><tbody>${wos.map(wo=>`<tr><td>${esc(wo.workOrderNo||wo.no||wo.id)}</td><td>${esc(wo.status||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีงานซ่อมที่เกี่ยวข้อง</div>'}</div><div class="panel"><h3>ประวัติ / Audit</h3>${logs.map(l=>`<div class="timeline-row"><b>${esc(l.action||'-')}</b><span>${esc(l.ts||'')} · ${esc(l.user||'')}</span></div>`).join('')||'<div class="empty">ยังไม่มีประวัติ</div>'}</div></div>`;
     $('#mrBack').onclick=()=>window.FLEET_MAINTENANCE_HUB_TEST?.maintenanceHubPage?window.FLEET_MAINTENANCE_HUB_TEST.maintenanceHubPage():requestRegistry();if($('#mrEdit'))$('#mrEdit').onclick=()=>requestForm(r.id);if($('#mrCancel'))$('#mrCancel').onclick=()=>{try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(r.id);requestDetail(r.id);toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}};
@@ -271,6 +271,6 @@
     ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
     canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,requestRegistry,
     requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
-    meterWarningMessage,applyMeterWarning
+    meterWarningMessage,applyMeterWarning,statusLabel
   };
 })();
