@@ -204,6 +204,7 @@
     if(downloadData&&!downloadName)downloadName=`returned-approval.${extensionForMime(actualMime||dataMime(downloadData))}`;
     overlay.innerHTML=`<div class="v48-viewer-card"><div class="v48-viewer-head"><div><b>${safeTitle}</b><small>${html?'เอกสารขออนุมัติซ่อม':'ไฟล์แนบผลอนุมัติจากภายนอก'}</small></div><button type="button" data-apd-viewer-close>×</button></div><div class="v48-viewer-body">${bodyHtml}</div><div class="v48-viewer-foot">${downloadData?`<a class="btn" href="${downloadData}" download="${esc(downloadName)}">ดาวน์โหลดไฟล์</a>`:''}<button type="button" class="btn primary" data-apd-viewer-close>ปิด</button></div></div>`;
     document.body.appendChild(overlay);
+    const sheet=overlay.querySelector?.('.print-sheet');if(sheet?.style)sheet.style.display='block';
     overlay.querySelectorAll?.('[data-apd-viewer-close]').forEach(b=>b.onclick=()=>overlay.remove());
     overlay.onclick=e=>{if(e.target===overlay)overlay.remove();};
     return overlay;
