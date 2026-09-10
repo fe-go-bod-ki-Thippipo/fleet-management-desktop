@@ -2,8 +2,9 @@
    Additive-only wrapper. Does not modify part3.js or locked Asset/Document modules. */
 (function(){
   const capturedLegacyMaintenanceForm=typeof maintenanceForm==='function'?maintenanceForm:null;
+  const capturedLegacyMaintenancePage=typeof maintenancePage==='function'?maintenancePage:null;
   const norm=s=>String(s??'').trim().toLowerCase();
-  const ensure=()=>{if(typeof STATE!=='object'||!STATE)return;STATE.vendors??=[];STATE.maintenance??=[];STATE.expenses??=[];STATE.assets??=[];};
+  const ensure=()=>{if(typeof STATE!=='object'||!STATE)return;STATE.vendors??=[];STATE.maintenance??=[];STATE.expenses??=[];STATE.assets??=[];STATE.pmPlans??=[];};
   const activeVendors=()=>{ensure();return STATE.vendors.filter(v=>v&&v.active===true&&v.deleted===false);};
   const vendorById=id=>{ensure();return STATE.vendors.find(v=>v&&v.id===id)||null;};
   const legacyVendorDisplay=wo=>String(wo?.vendorNameSnapshot||vendorById(wo?.vendorId)?.name||wo?.vendor||'-');
@@ -52,16 +53,27 @@
     );
   }
 
+  function maintenancePageWithVendor(){
+    ensure();
+    setHead('ซ่อมบำรุง / PM');
+    content.innerHTML=`<div class="grid2"><div class="panel"><div class="toolbar"><h3>Maintenance Work Order</h3><button class="btn primary" id="newWO">+ งานซ่อม</button></div>${simpleTable(STATE.maintenance,[['no','เลขที่'],[x=>assetLabel(x.assetId),'ทรัพย์สิน'],['issue','อาการ/งาน'],[x=>legacyVendorDisplay(x),'ผู้ให้บริการ'],['status','สถานะ'],['cost','ค่าใช้จ่าย']])}</div><div class="panel"><div class="toolbar"><h3>PM Plan</h3><button class="btn primary" id="newPM">+ แผน PM</button></div>${simpleTable(STATE.pmPlans,[['name','แผน'],[x=>assetLabel(x.assetId),'ทรัพย์สิน'],['triggerType','เกณฑ์'],['nextDue','กำหนดถัดไป']])}</div></div>`;
+    $('#newWO').onclick=maintenanceForm;
+    $('#newPM').onclick=pmForm;
+  }
+
   if(capturedLegacyMaintenanceForm)maintenanceForm=maintenanceFormWithVendor;
+  if(capturedLegacyMaintenancePage)maintenancePage=maintenancePageWithVendor;
 
   window.FLEET_MAINTENANCE_VENDOR_PATCH_TEST={
     capturedLegacyMaintenanceForm,
+    capturedLegacyMaintenancePage,
     activeVendors,
     vendorById,
     legacyVendorDisplay,
     vendorSelectHtml,
     saveLegacyMaintenanceWithVendor,
     maintenanceFormWithVendor,
+    maintenancePageWithVendor,
     norm
   };
 })();
