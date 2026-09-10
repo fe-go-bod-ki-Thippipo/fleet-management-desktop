@@ -7,10 +7,12 @@ on:
       - 'release/v0.4.8-document-core-consolidation'
       - 'feature/maintenance-v1-batch1-vendor-foundation'
       - 'feature/maintenance-v1-batch2-legacy-vendor-patch'
+      - 'ci/maintenance-v1-batch5-required-fix-validation'
     paths:
       - 'BUILD-v0.4.8'
       - 'BUILD-maintenance-v1-batch1'
       - 'BUILD-maintenance-v1-batch2'
+      - 'BUILD-maintenance-v1-batch5-fix1'
 jobs:
   build:
     runs-on: windows-latest
