@@ -3,6 +3,7 @@
 (function(){
   const requestApi=window.FLEET_MAINTENANCE_REQUEST_TEST||null;
   const originalRequestDetail=requestApi?.requestDetail||null;
+  let activeRequestId='';
   const role=()=>typeof CURRENT_ROLE==='string'?CURRENT_ROLE:'';
   const canManage=()=>['admin','manager','fleetOfficer'].includes(role());
   const actor=()=>{
@@ -180,27 +181,20 @@
 
   function appendApprovalPanels(requestId){
     if(!requestById(requestId))return false;
-    const existing=content?.querySelector?.('#apdPanels');if(existing)return false;
+    if(content?.querySelector?.('#apdPanels'))return false;
     content.insertAdjacentHTML?content.insertAdjacentHTML('beforeend',approvalPanelsHtml(requestId)):content.innerHTML+=approvalPanelsHtml(requestId);
     bindApprovalPanelEvents(requestId);return true;
   }
 
   function wrappedRequestDetail(id){
+    activeRequestId=id;
     if(originalRequestDetail)originalRequestDetail(id);
     appendApprovalPanels(id);
   }
 
   function restoreApprovalPanelsIfNeeded(){
-    if(!content?.querySelector)return false;
-    const back=content.querySelector('#mrBack');
-    if(!back||content.querySelector('#apdPanels'))return false;
-    const requestNo=String(typeof title!=='undefined'&&title?.textContent||'').trim();
-    let request=STATE?.maintenanceRequests?.find?.(x=>x&&x.requestNo===requestNo)||null;
-    if(!request){
-      const legacyId=String(content.querySelector('[data-request-id]')?.dataset?.requestId||'');
-      if(legacyId)request=requestById(legacyId);
-    }
-    if(!request&&STATE?.maintenanceRequests?.length===1)request=STATE.maintenanceRequests[0];
+    if(!content?.querySelector||!content.querySelector('#mrBack')||content.querySelector('#apdPanels'))return false;
+    const request=requestById(activeRequestId);
     if(!request)return false;
     return appendApprovalPanels(request.id);
   }
@@ -218,5 +212,5 @@
   if(typeof document!=='undefined'&&document?.addEventListener){document.addEventListener('click',e=>{const t=e.target;if(t?.closest?.('[data-mr-edit],[data-mr-cancel]'))return;const row=t?.closest?.('[data-mr-row]');if(!row)return;e.preventDefault?.();e.stopImmediatePropagation?.();wrappedRequestDetail(row.dataset.mrRow);},true);}
 
   window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_API={hasApprovedResult,resultForRequest,docsForRequest};
-  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest,appendApprovalPanels,restoreApprovalPanelsIfNeeded,approvalObserver};
+  window.FLEET_MAINTENANCE_APPROVAL_DOCUMENT_TEST={ensureApprovalState,canManage,actor,repairHistory,buildSnapshot,generateApprovalDocument,saveExternalApprovalResult,hasLinkedWorkOrder,hasApprovedResult,approvalPanelsHtml,printSheetHtml,repairHistoryPrintHtml,wrappedRequestDetail,originalRequestDetail,workOrderCost,docsForRequest,resultForRequest,appendApprovalPanels,restoreApprovalPanelsIfNeeded,approvalObserver,getActiveRequestId:()=>activeRequestId};
 })();
