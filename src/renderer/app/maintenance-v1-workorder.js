@@ -122,9 +122,19 @@
   }
   function wrappedRequestDetail(id){activeRequestId=id;if(capturedRequestDetail)capturedRequestDetail(id);appendCreateButton(id);}
   function restoreCreateButton(){if(!activeRequestId||!content?.querySelector)return false;if(content.querySelector('#woCreatePanel'))return false;if(!content.querySelector('#apdPanels'))return false;return appendCreateButton(activeRequestId);}
+  function captureRequestRowNavigation(e){
+    const t=e?.target;if(t?.closest?.('[data-mr-edit],[data-mr-cancel]'))return false;
+    const row=t?.closest?.('[data-mr-row]'),id=row?.dataset?.mrRow;if(!id)return false;
+    activeRequestId=id;
+    if(typeof setTimeout==='function')setTimeout(()=>restoreCreateButton(),0);
+    return true;
+  }
   let observer=null;if(typeof MutationObserver==='function'&&content){observer=new MutationObserver(()=>restoreCreateButton());observer.observe(content,{childList:true,subtree:true});}
   if(requestApi&&capturedRequestDetail)requestApi.requestDetail=wrappedRequestDetail;
+  /* Batch 5 intercepts document capture clicks and calls stopImmediatePropagation().
+     Capture at window first so Batch 6 learns the request id without interfering with Batch 5 rendering. */
+  if(typeof window!=='undefined'&&window?.addEventListener)window.addEventListener('click',captureRequestRowNavigation,true);
 
   window.FLEET_MAINTENANCE_WORKORDER_API={workOrderRegistry,workOrderDetail,hasWorkOrderFor,createFromRequest};
-  window.FLEET_MAINTENANCE_WORKORDER_TEST={ensureState,approved,approvalResult,nextWorkOrderNo,createFromRequest,transition,cancelWorkOrder,addRepairItem,editRepairItem,deleteRepairItem,toggleRepairItem,itemsFor,hasWorkOrderFor,filteredRows,workOrderRegistry,workOrderDetail,appendCreateButton,wrappedRequestDetail,restoreCreateButton,getActiveRequestId:()=>activeRequestId,canView,canManage,canCancel,statusLabel,auditHtml};
+  window.FLEET_MAINTENANCE_WORKORDER_TEST={ensureState,approved,approvalResult,nextWorkOrderNo,createFromRequest,transition,cancelWorkOrder,addRepairItem,editRepairItem,deleteRepairItem,toggleRepairItem,itemsFor,hasWorkOrderFor,filteredRows,workOrderRegistry,workOrderDetail,appendCreateButton,wrappedRequestDetail,restoreCreateButton,captureRequestRowNavigation,getActiveRequestId:()=>activeRequestId,canView,canManage,canCancel,statusLabel,auditHtml};
 })();
