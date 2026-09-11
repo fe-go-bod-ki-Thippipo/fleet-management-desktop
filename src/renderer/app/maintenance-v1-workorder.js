@@ -89,7 +89,7 @@
     qa('[data-wo-open]').forEach(b=>b.onclick=e=>{e.stopPropagation?.();workOrderDetail(b.dataset.woOpen);});qa('[data-wo-request]').forEach(b=>b.onclick=e=>{e.stopPropagation?.();openRequest(b.dataset.woRequest);});qa('[data-wo-row]').forEach(tr=>tr.onclick=()=>workOrderDetail(tr.dataset.woRow));
   }
 
-  function auditHtml(id){const rows=(STATE.audit||[]).filter(a=>a&&a.entity==='workOrder'&&(a.entityId===id||a.id===id)).slice().reverse();return rows.length?`<table><thead><tr><th>เวลา</th><th>รายการ</th><th>ผู้ทำ</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.at||a.createdAt||'-')}</td><td>${esc(a.action||'-')}</td><td>${esc(a.by||a.actor||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีประวัติ</div>';}
+  function auditHtml(id){const rows=(STATE.audit||[]).filter(a=>a&&a.entity==='workOrder'&&a.recordId===id).slice().reverse();return rows.length?`<table><thead><tr><th>เวลา</th><th>รายการ</th><th>ผู้ทำ</th></tr></thead><tbody>${rows.map(a=>`<tr><td>${esc(a.ts||'-')}</td><td>${esc(a.action||'-')}</td><td>${esc(a.user||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีประวัติ</div>';}
   function workOrderDetail(id){
     if(!canView())throw Error('บทบาทนี้ไม่มีสิทธิ์ดู Work Order');const wo=workOrderById(id);if(!wo)throw Error('ไม่พบ Work Order');const items=itemsFor(id),cancelled=wo.status==='cancelled';
     setHead?.(`Work Order ${wo.workOrderNo||''}`,'Job Center');
@@ -126,5 +126,5 @@
   if(requestApi&&capturedRequestDetail)requestApi.requestDetail=wrappedRequestDetail;
 
   window.FLEET_MAINTENANCE_WORKORDER_API={workOrderRegistry,workOrderDetail,hasWorkOrderFor,createFromRequest};
-  window.FLEET_MAINTENANCE_WORKORDER_TEST={ensureState,approved,approvalResult,nextWorkOrderNo,createFromRequest,transition,cancelWorkOrder,addRepairItem,editRepairItem,deleteRepairItem,toggleRepairItem,itemsFor,hasWorkOrderFor,filteredRows,workOrderRegistry,workOrderDetail,appendCreateButton,wrappedRequestDetail,restoreCreateButton,getActiveRequestId:()=>activeRequestId,canView,canManage,canCancel,statusLabel};
+  window.FLEET_MAINTENANCE_WORKORDER_TEST={ensureState,approved,approvalResult,nextWorkOrderNo,createFromRequest,transition,cancelWorkOrder,addRepairItem,editRepairItem,deleteRepairItem,toggleRepairItem,itemsFor,hasWorkOrderFor,filteredRows,workOrderRegistry,workOrderDetail,appendCreateButton,wrappedRequestDetail,restoreCreateButton,getActiveRequestId:()=>activeRequestId,canView,canManage,canCancel,statusLabel,auditHtml};
 })();
