@@ -13,8 +13,10 @@
   }
   function tabsHtml(){return `<div class="tabs">${[['requests','คำขอซ่อม'],['jobs','งานซ่อม'],['pm','แผน PM']].map(([k,l])=>`<button data-mtab="${k}" class="${mtab===k?'active':''}">${l}</button>`).join('')}</div>`;}
 
-  function jobsHtml(){
+  function jobsHtml(host){
     ensureHubState();
+    const api=window.FLEET_MAINTENANCE_WORKORDER_API;
+    if(api?.workOrderRegistry){api.workOrderRegistry(host);return '';}
     const rows=STATE.workOrders||[];
     if(rows.length)return `<div class="panel"><h3>งานซ่อม</h3>${simpleTable(rows,[[x=>x.workOrderNo||x.no||x.id,'เลขที่'],[x=>typeof assetLabel==='function'?assetLabel(x.assetId):x.assetId,'ทรัพย์สิน'],['status','สถานะ']])}</div>`;
     const legacy=STATE.maintenance||[];
@@ -35,8 +37,9 @@
     if(mtab==='requests'){
       if(window.FLEET_MAINTENANCE_REQUEST_TEST?.requestRegistry)window.FLEET_MAINTENANCE_REQUEST_TEST.requestRegistry(host);
       else host.innerHTML='<div class="panel"><div class="empty">Maintenance Request module ไม่พร้อมใช้งาน</div></div>';
-    }else if(mtab==='jobs')host.innerHTML=jobsHtml();
-    else if(mtab==='pm'){
+    }else if(mtab==='jobs'){
+      const html=jobsHtml(host);if(html)host.innerHTML=html;
+    }else if(mtab==='pm'){
       host.innerHTML=pmHtml();
       if($('#hubNewPM'))$('#hubNewPM').onclick=()=>typeof pmForm==='function'&&pmForm();
     }
