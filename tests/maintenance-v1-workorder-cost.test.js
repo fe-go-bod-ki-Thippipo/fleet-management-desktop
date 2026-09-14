@@ -106,10 +106,22 @@ test('isOverBudget handles approved amount and null correctly',()=>{
   const noLimit=x.addWo({approvedAmount:null});x.api.addPartItem(noLimit.id,{name:'Huge',qty:1,unitCost:999999});assert.equal(x.api.isOverBudget(noLimit.id),false);
 });
 
+test('over-budget note stays editable after cancellation but remains permission guarded',()=>{
+  const x=load(),w=x.addWo({approvedAmount:10});
+  x.api.addPartItem(w.id,{name:'A',qty:1,unitCost:20});
+  x.api.cancelWorkOrder(w.id,'cancel');
+  assert.equal(x.api.isOverBudget(w.id),true);
+  assert.doesNotThrow(()=>x.api.saveOverBudgetNote(w.id,'บันทึกหลังยกเลิก'));
+  assert.equal(w.overBudgetNote,'บันทึกหลังยกเลิก');
+  x.api.workOrderDetail(w.id);assert.match(x.content.innerHTML,/woOverBudgetNote/);assert.match(x.content.innerHTML,/บันทึกหมายเหตุ/);
+  x.role('viewer');assert.throws(()=>x.api.saveOverBudgetNote(w.id,'ห้าม'));
+});
+
 test('permission fail-closed blocks every new mutation for unknown role',()=>{
   const x=load('unknown'),w=x.addWo();
   assert.throws(()=>x.api.dispatchExternal(w.id,'V1'));assert.throws(()=>x.api.receiveFromVendor(w.id));assert.throws(()=>x.api.changeVendor(w.id,'V2','x'));
   assert.throws(()=>x.api.addPartItem(w.id,{name:'A'}));assert.throws(()=>x.api.addLabourItem(w.id,{description:'L'}));assert.throws(()=>x.api.addExternalServiceCost(w.id,{amount:1}));
+  assert.throws(()=>x.api.saveOverBudgetNote(w.id,'x'));
   x.role('viewer');assert.throws(()=>x.api.dispatchExternal(w.id,'V1'));
   x.role('fleetOfficer');assert.doesNotThrow(()=>x.api.addPartItem(w.id,{name:'A',qty:1,unitCost:1}));
 });
