@@ -126,7 +126,7 @@
     if($('#woSourceRequest'))$('#woSourceRequest').onclick=()=>openRequest(wo.sourceRequestId);
     if($('#woStart'))$('#woStart').onclick=()=>{try{transition(wo.id,'in_progress');workOrderDetail(wo.id)}catch(e){toast(e.message||String(e),true)}};
     if($('#woFinish'))$('#woFinish').onclick=()=>{try{transition(wo.id,'pending_inspection');workOrderDetail(wo.id)}catch(e){toast(e.message||String(e),true)}};
-    if($('#woCancel'))$('#woCancel').onclick=()=>{const reason=typeof prompt==='function'?prompt('เหตุผลการยกเลิก Work Order'):' ';if(reason==null)return;try{cancelWorkOrder(wo.id,reason);workOrderDetail(wo.id)}catch(e){toast(e.message||String(e),true)}};
+    if($('#woCancel'))$('#woCancel').onclick=()=>formModal('ยกเลิก Work Order','<label class="wide">เหตุผลการยกเลิก<textarea name="reason" required></textarea></label>',p=>{const x=cancelWorkOrder(wo.id,p.reason);setTimeout(()=>workOrderDetail(wo.id),0);return x});
     if($('#woAddItem'))$('#woAddItem').onclick=()=>repairItemForm(wo.id);
     $$('[data-ri-edit]').forEach(b=>b.onclick=()=>repairItemForm(wo.id,b.dataset.riEdit));$$('[data-ri-delete]').forEach(b=>b.onclick=()=>{try{deleteRepairItem(b.dataset.riDelete);workOrderDetail(wo.id)}catch(e){toast(e.message||String(e),true)}});$$('[data-ri-toggle]').forEach(b=>b.onchange=()=>{try{toggleRepairItem(b.dataset.riToggle,b.checked);workOrderDetail(wo.id)}catch(e){toast(e.message||String(e),true)}});
   }
