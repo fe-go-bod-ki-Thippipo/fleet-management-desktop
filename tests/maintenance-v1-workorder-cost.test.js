@@ -6,6 +6,8 @@ const vm=require('vm');
 function load(role='admin'){
   let n=0;
   const audits=[];
+  const elements={};
+  let modal=null;
   const STATE={
     workOrders:[],repairItems:[],maintenanceRequests:[],assets:[],audit:[],
     userAccounts:[{role:'admin',personId:'PA',active:true},{role:'manager',personId:'PM',active:true},{role:'fleetOfficer',personId:'PF',active:true}],
@@ -18,14 +20,16 @@ function load(role='admin'){
     vendorDispatches:[],partItems:[],labourItems:[],externalServiceCosts:[]
   };
   const content={innerHTML:'',querySelector(){return null},insertAdjacentHTML(_,h){this.innerHTML+=h}};
-  const ctx={STATE,CURRENT_ROLE:role,window:null,content,console,structuredClone,uid:p=>`${p}-${++n}`,now:()=>`2026-09-14T00:00:${String(n).padStart(2,'0')}Z`,esc:v=>String(v??''),MutationObserver:function(){this.observe=()=>{}},setHead:()=>{},toast:()=>{},formModal:()=>{},setTimeout:f=>{f();return 1},$:()=>null,$$:()=>[],document:{addEventListener(){}},addEventListener(){}};
+  const ctx={STATE,CURRENT_ROLE:role,window:null,content,console,structuredClone,uid:p=>`${p}-${++n}`,now:()=>`2026-09-14T00:00:${String(n).padStart(2,'0')}Z`,esc:v=>String(v??''),MutationObserver:function(){this.observe=()=>{}},setHead:()=>{},toast:()=>{},setTimeout:f=>{f();return 1},$$:()=>[],document:{addEventListener(){}},addEventListener(){}};
+  ctx.$=sel=>{if(typeof sel!=='string'||!sel.startsWith('#'))return null;const id=sel.slice(1);if(!content.innerHTML.includes(`id="${id}"`))return null;return elements[id]??=( {id} );};
+  ctx.formModal=(title,html,submit)=>{modal={title,html,submit};return modal;};
   ctx.pAudit=(action,entity,recordId,before,after)=>{const row={ts:ctx.now(),user:(STATE.userAccounts.find(x=>x.role===ctx.CURRENT_ROLE&&x.active!==false)?.personId||ctx.CURRENT_ROLE),action,entity,recordId,before,after};audits.push(row);STATE.audit.push(row)};
   ctx.window=ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-workorder.js','utf8'),ctx);
   const api=ctx.FLEET_MAINTENANCE_WORKORDER_TEST;
   const addWo=(over={})=>{const w={id:`W${STATE.workOrders.length+1}`,workOrderNo:`WO-${STATE.workOrders.length+1}`,assetId:'A1',maintenanceType:'repair',repairMode:'internal',status:'open',approvedAmount:1000,overBudgetNote:null,createdAt:'2026-09-14',...over};STATE.workOrders.push(w);return w};
-  return {ctx,STATE,api,prod:ctx.FLEET_MAINTENANCE_WORKORDER_API,audits,role:r=>ctx.CURRENT_ROLE=r,addWo,content};
+  return {ctx,STATE,api,prod:ctx.FLEET_MAINTENANCE_WORKORDER_API,audits,role:r=>ctx.CURRENT_ROLE=r,addWo,content,element:id=>ctx.$(`#${id}`),modal:()=>modal};
 }
 
 test('dispatch external only from open and keeps WorkOrder vendor snapshot unchanged',()=>{
@@ -113,8 +117,46 @@ test('over-budget note stays editable after cancellation but remains permission 
   assert.equal(x.api.isOverBudget(w.id),true);
   assert.doesNotThrow(()=>x.api.saveOverBudgetNote(w.id,'บันทึกหลังยกเลิก'));
   assert.equal(w.overBudgetNote,'บันทึกหลังยกเลิก');
-  x.api.workOrderDetail(w.id);assert.match(x.content.innerHTML,/woOverBudgetNote/);assert.match(x.content.innerHTML,/บันทึกหมายเหตุ/);
+  x.api.workOrderDetail(w.id);assert.match(x.content.innerHTML,/บันทึกหลังยกเลิก/);assert.match(x.content.innerHTML,/woEditOverBudgetNote/);assert.doesNotMatch(x.content.innerHTML,/woOverBudgetNote/);
   x.role('viewer');assert.throws(()=>x.api.saveOverBudgetNote(w.id,'ห้าม'));
+});
+
+test('over-budget note renders fallback and edit button for managing role',()=>{
+  const x=load(),w=x.addWo({approvedAmount:10,overBudgetNote:null});
+  x.api.addPartItem(w.id,{name:'A',qty:1,unitCost:20});x.api.workOrderDetail(w.id);
+  assert.match(x.content.innerHTML,/ยังไม่มีหมายเหตุ/);assert.match(x.content.innerHTML,/แก้ไขหมายเหตุ/);assert.ok(x.element('woEditOverBudgetNote'));
+});
+
+test('over-budget note edit opens formModal prefilled and saves through existing function',()=>{
+  const x=load(),w=x.addWo({approvedAmount:10,overBudgetNote:'ค่าเดิม'});
+  x.api.addPartItem(w.id,{name:'A',qty:1,unitCost:20});x.api.workOrderDetail(w.id);
+  x.element('woEditOverBudgetNote').onclick();
+  assert.equal(x.modal().title,'แก้ไขหมายเหตุเกินวงเงิน');assert.match(x.modal().html,/ค่าเดิม/);
+  x.modal().submit({note:'ค่าใหม่'});
+  assert.equal(w.overBudgetNote,'ค่าใหม่');assert.match(x.content.innerHTML,/ค่าใหม่/);assert.ok(x.audits.some(a=>a.action==='บันทึกหมายเหตุเกินวงเงิน'));
+});
+
+test('over-budget note edit button is hidden for viewer',()=>{
+  const x=load('viewer'),w=x.addWo({approvedAmount:10,overBudgetNote:'อ่านอย่างเดียว'});
+  x.STATE.partItems.push({id:'P',workOrderId:w.id,name:'A',qty:1,unitCost:20});x.api.workOrderDetail(w.id);
+  assert.match(x.content.innerHTML,/อ่านอย่างเดียว/);assert.doesNotMatch(x.content.innerHTML,/woEditOverBudgetNote/);assert.equal(x.element('woEditOverBudgetNote'),null);
+});
+
+test('over-budget note popup remains available on cancelled WorkOrder',()=>{
+  const x=load(),w=x.addWo({approvedAmount:10,status:'cancelled',overBudgetNote:'ก่อนแก้'});
+  x.STATE.partItems.push({id:'P',workOrderId:w.id,name:'A',qty:1,unitCost:20});x.api.workOrderDetail(w.id);
+  const b=x.element('woEditOverBudgetNote');assert.ok(b);b.onclick();assert.match(x.modal().html,/ก่อนแก้/);x.modal().submit({note:'หลังยกเลิกยังแก้ได้'});
+  assert.equal(w.overBudgetNote,'หลังยกเลิกยังแก้ได้');assert.match(x.content.innerHTML,/หลังยกเลิกยังแก้ได้/);
+});
+
+test('WorkOrder Detail header always shows approved amount when present',()=>{
+  const x=load(),w=x.addWo({approvedAmount:1234.5});x.api.workOrderDetail(w.id);
+  assert.match(x.content.innerHTML,/วงเงินอนุมัติ:<\/b> ฿1,234\.50/);
+});
+
+test('WorkOrder Detail header omits approved amount when null',()=>{
+  const x=load(),w=x.addWo({approvedAmount:null});x.api.workOrderDetail(w.id);
+  assert.doesNotMatch(x.content.innerHTML,/วงเงินอนุมัติ/);
 });
 
 test('permission fail-closed blocks every new mutation for unknown role',()=>{
@@ -161,7 +203,7 @@ test('detail renders cost blocks over-budget badge and dispatch history',()=>{
   x.api.dispatchExternal(w.id,'V1');x.api.addExternalServiceCost(w.id,{amount:25});
   x.api.workOrderDetail(w.id);
   const h=x.content.innerHTML;
-  assert.match(h,/อะไหล่/);assert.match(h,/ค่าแรง/);assert.match(h,/ค่าซ่อมภายนอก/);assert.match(h,/ยอดรวมทั้งหมด/);assert.match(h,/145\.00/);assert.match(h,/เกินวงเงินอนุมัติ/);assert.match(h,/ประวัติการส่งซ่อม/);assert.match(h,/อู่หนึ่ง/);
+  assert.match(h,/อะไหล่/);assert.match(h,/ค่าแรง/);assert.match(h,/ค่าซ่อมภายนอก/);assert.match(h,/ยอดรวมทั้งหมด/);assert.match(h,/145\.00/);assert.match(h,/เกินวงเงินอนุมัติ/);assert.match(h,/ประวัติการส่งซ่อม/);assert.match(h,/อู่หนึ่ง/);assert.match(h,/วงเงินอนุมัติ/);
 });
 
 test('production API exposes totalCostFor and isOverBudget for Batch 8',()=>{
