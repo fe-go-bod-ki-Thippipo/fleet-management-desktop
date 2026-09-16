@@ -11,13 +11,24 @@
     return Boolean(api&&typeof api.canCreate==='function'&&api.canCreate()&&typeof api.requestForm==='function');
   }
 
+  function requestPanel(){
+    if(typeof content==='undefined'||!content||typeof content.querySelectorAll!=='function')return null;
+    const panels=Array.from(content.querySelectorAll('.panel')||[]);
+    return panels.find(panel=>{
+      const heading=panel?.querySelector?.('h3');
+      return heading&&String(heading.textContent||'').trim()==='คำขอแจ้งซ่อม';
+    })||null;
+  }
+
   function appendQuickRequestButton(a){
     if(typeof assetTab==='undefined'||assetTab!=='maintenance'||!a||!canQuickRequest())return;
     if(typeof content==='undefined'||!content)return;
     if(content.querySelector?.('#assetQuickMaintenanceRequest'))return;
-    const html='<div class="toolbar" id="assetQuickMaintenanceRequest" style="justify-content:flex-end;margin:0 0 12px"><button class="btn primary" id="assetQuickMaintenanceRequestBtn">+ แจ้งซ่อม</button></div>';
-    if(typeof content.insertAdjacentHTML==='function')content.insertAdjacentHTML('afterbegin',html);
-    else content.innerHTML=html+(content.innerHTML||'');
+    const panel=requestPanel();
+    const heading=panel?.querySelector?.('h3');
+    if(!heading||typeof heading.insertAdjacentHTML!=='function')return;
+    const html='<span class="toolbar" id="assetQuickMaintenanceRequest" style="float:right;margin-top:-36px"><button class="btn primary" id="assetQuickMaintenanceRequestBtn">+ แจ้งซ่อม</button></span>';
+    heading.insertAdjacentHTML('afterend',html);
     const btn=content.querySelector?.('#assetQuickMaintenanceRequestBtn')||(typeof $==='function'?$('#assetQuickMaintenanceRequestBtn'):null);
     if(btn)btn.onclick=()=>requestApi()?.requestForm?.('',{assetId:a.id});
   }
@@ -30,5 +41,5 @@
 
   if(capturedRenderAssetTab)renderAssetTab=wrappedRenderAssetTab;
 
-  if(typeof window!=='undefined')window.FLEET_MAINTENANCE_ASSET_QUICK_REQUEST_TEST={capturedRenderAssetTab,wrappedRenderAssetTab,appendQuickRequestButton,canQuickRequest};
+  if(typeof window!=='undefined')window.FLEET_MAINTENANCE_ASSET_QUICK_REQUEST_TEST={capturedRenderAssetTab,wrappedRenderAssetTab,appendQuickRequestButton,canQuickRequest,requestPanel};
 })();
