@@ -169,6 +169,33 @@
     return x;
   }
 
+  function assertAttachmentMutable(x){
+    if(!canEdit())throw Error('บทบาทนี้ไม่มีสิทธิ์แก้ไขคำขอซ่อม');
+    if(!['draft','document_printed'].includes(x.status))throw Error('แก้ไขไฟล์แนบได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น');
+  }
+  function deleteAttachment(requestId,attachmentId){
+    ensureRequestState();
+    const x=STATE.maintenanceRequests.find(r=>r&&r.id===requestId);if(!x)throw Error('ไม่พบคำขอซ่อม');
+    assertAttachmentMutable(x);
+    const before=structuredClone(x);
+    x.attachments=(x.attachments||[]).filter(a=>a&&a.id!==attachmentId);
+    x.updatedAt=now();x.updatedBy=actor();
+    audit('ลบไฟล์แนบ',x.id,before,structuredClone(x));
+    return x;
+  }
+  function renameAttachment(requestId,attachmentId,newName){
+    ensureRequestState();
+    const x=STATE.maintenanceRequests.find(r=>r&&r.id===requestId);if(!x)throw Error('ไม่พบคำขอซ่อม');
+    assertAttachmentMutable(x);
+    const name=String(newName||'').trim();if(!name)throw Error('กรุณาระบุชื่อไฟล์');
+    const att=(x.attachments||[]).find(a=>a&&a.id===attachmentId);if(!att)throw Error('ไม่พบไฟล์แนบ');
+    const before=structuredClone(x);
+    att.name=name;
+    x.updatedAt=now();x.updatedBy=actor();
+    audit('แก้ไขชื่อไฟล์แนบ',x.id,before,structuredClone(x));
+    return x;
+  }
+
   function peopleOptions(selected=''){
     ensureRequestState();
     return '<option value="">- กรอกชื่อผู้แจ้งเอง -</option>'+STATE.people.filter(p=>p&&p.active!==false).map(p=>`<option value="${esc(p.id)}" ${String(p.id)===String(selected)?'selected':''}>${esc(p.name||p.code||p.id)}</option>`).join('');
@@ -269,17 +296,42 @@
     overlay.querySelectorAll?.('[data-mr-viewer-close]').forEach(b=>b.addEventListener('click',closeAttachmentViewer));
   }
   let mrAttachmentRegistry=[];
-  function attachmentHtml(a){
+  function attachmentHtml(a,mutable){
     if(!a)return '';
     const idx=mrAttachmentRegistry.length;
     mrAttachmentRegistry.push(a);
-    if(String(a.type||'').startsWith('image/')&&a.data)return `<div class="thumb"><img src="${esc(a.data)}" data-mr-attachment-view="${idx}" style="cursor:pointer"><small>${esc(a.name||'รูป')}</small></div>`;
-    return a.data?`<button type="button" class="btn sm" data-mr-attachment-view="${idx}">${esc(a.name||'ไฟล์')}</button>`:`<span>${esc(a.name||'ไฟล์')}</span>`;
+    const actions=mutable?`<div class="thumb-actions"><button type="button" class="btn sm" data-mr-attachment-edit="${esc(a.id)}">แก้ไข</button> <button type="button" class="btn sm" data-mr-attachment-delete="${esc(a.id)}">ลบ</button></div>`:'';
+    if(String(a.type||'').startsWith('image/')&&a.data)return `<div class="thumb"><img src="${esc(a.data)}" data-mr-attachment-view="${idx}" style="cursor:pointer"><small>${esc(a.name||'รูป')}</small>${actions}</div>`;
+    return a.data?`<div class="thumb"><button type="button" class="btn sm" data-mr-attachment-view="${idx}">${esc(a.name||'ไฟล์')}</button>${actions}</div>`:`<span>${esc(a.name||'ไฟล์')}</span>${actions}`;
   }
   function bindAttachmentViewers(){
     if(typeof $$!=='function')return;
     $$('[data-mr-attachment-view]').forEach(el=>{
       el.onclick=()=>openAttachmentViewer(mrAttachmentRegistry[Number(el.dataset.mrAttachmentView)]);
+    });
+  }
+  function bindAttachmentActions(requestId){
+    if(typeof $$!=='function')return;
+    $$('[data-mr-attachment-edit]').forEach(el=>{
+      el.onclick=()=>{
+        const attId=el.dataset.mrAttachmentEdit;
+        const current=(STATE.maintenanceRequests.find(r=>r&&r.id===requestId)?.attachments||[]).find(a=>a&&a.id===attId);
+        formModal('แก้ไขชื่อไฟล์แนบ',`<label class="wide">ชื่อไฟล์<input name="name" required value="${esc(current?.name||'')}"></label>`,p=>{
+          const x=renameAttachment(requestId,attId,p.name);
+          setTimeout(()=>requestDetail(requestId),0);
+          return x;
+        });
+      };
+    });
+    $$('[data-mr-attachment-delete]').forEach(el=>{
+      el.onclick=()=>{
+        try{
+          if(typeof confirm==='function'&&!confirm('ยืนยันลบไฟล์แนบนี้?'))return;
+          deleteAttachment(requestId,el.dataset.mrAttachmentDelete);
+          requestDetail(requestId);
+          toast('ลบไฟล์แนบแล้ว');
+        }catch(x){toast(x.message||String(x),true)}
+      };
     });
   }
 
@@ -291,18 +343,21 @@
     const canOpenAsset=Boolean(a)&&typeof assetProfile!=='undefined';
     const assetFieldHtml=kv('ทรัพย์สิน',assetLabelFor(a))+(canOpenAsset?'<button type="button" class="btn sm" id="mrOpenAsset" style="margin-left:-8px">เปิดดูทรัพย์สิน</button>':'');
     setHead(r.requestNo,'Maintenance Request Detail');
+    const attachMutable=canEdit()&&['draft','document_printed'].includes(r.status);
     content.innerHTML=`<div class="panel"><div class="toolbar"><button class="btn" id="mrBack">← กลับทะเบียน</button><div>${canEdit()&&['draft','document_printed'].includes(r.status)?'<button class="btn" id="mrEdit">แก้ไข</button>':''}${canCancel()&&r.status==='draft'?' <button class="btn" id="mrCancel">ยกเลิกคำขอ</button>':''}</div></div><div class="hero-info">${kv('เลขที่คำขอ',r.requestNo)}${assetFieldHtml}${kv('สถานะ',statusLabel(r.status))}${kv('ความเร่งด่วน',urgencyLabel(r.urgency))}${kv('ประมาณการ',`฿${money(r.estimatedCost)}`)}${kv('Work Order',hasWorkOrder(r)?'มีแล้ว':'ยังไม่มี')}</div></div>
-      <div class="grid2"><div class="panel"><h3>ข้อมูลคำขอ</h3><div class="grid3">${kv('วันที่แจ้ง',r.requestDate)}${kv('ผู้แจ้ง',r.requesterNameSnapshot)}${kv('ประเภทงาน',typeLabel(r.maintenanceType))}${kv('มิเตอร์',r.meterValue===''?'-':r.meterValue)}${kv('อู่ที่เสนอ',r.proposedVendorNameSnapshot||'-')}${kv('ประมาณการ',money(r.estimatedCost))}</div><h4>ปัญหา/อาการ</h4><p>${esc(r.issue||'-')}</p><h4>หมายเหตุ</h4><p>${esc(r.requestNote||'-')}</p></div><div class="panel"><h3>ไฟล์ / รูป</h3><div class="thumb-row">${(r.attachments||[]).map(attachmentHtml).join('')||'<div class="empty">ยังไม่มีไฟล์แนบ</div>'}</div></div></div>
+      <div class="grid2"><div class="panel"><h3>ข้อมูลคำขอ</h3><div class="grid3">${kv('วันที่แจ้ง',r.requestDate)}${kv('ผู้แจ้ง',r.requesterNameSnapshot)}${kv('ประเภทงาน',typeLabel(r.maintenanceType))}${kv('มิเตอร์',r.meterValue===''?'-':r.meterValue)}${kv('อู่ที่เสนอ',r.proposedVendorNameSnapshot||'-')}${kv('ประมาณการ',money(r.estimatedCost))}</div><h4>ปัญหา/อาการ</h4><p>${esc(r.issue||'-')}</p><h4>หมายเหตุ</h4><p>${esc(r.requestNote||'-')}</p></div><div class="panel"><h3>ไฟล์ / รูป</h3><div class="thumb-row">${(r.attachments||[]).map(a=>attachmentHtml(a,attachMutable)).join('')||'<div class="empty">ยังไม่มีไฟล์แนบ</div>'}</div></div></div>
       <div class="grid2"><div class="panel"><h3>งานซ่อมที่เกี่ยวข้อง</h3>${wos.length?`<table><thead><tr><th>เลขที่</th><th>สถานะ</th></tr></thead><tbody>${wos.map(wo=>`<tr data-mr-related-wo="${esc(wo.id)}" style="cursor:pointer"><td>${esc(wo.workOrderNo||wo.no||wo.id)}</td><td>${esc(wo.status||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีงานซ่อมที่เกี่ยวข้อง</div>'}</div><div class="panel"><h3>ประวัติ / Audit</h3>${logs.map(l=>`<div class="timeline-row"><b>${esc(l.action||'-')}</b><span>${esc(l.ts||'')} · ${esc(l.user||'')}</span></div>`).join('')||'<div class="empty">ยังไม่มีประวัติ</div>'}</div></div>`;
     $('#mrBack').onclick=()=>window.FLEET_MAINTENANCE_HUB_TEST?.maintenanceHubPage?window.FLEET_MAINTENANCE_HUB_TEST.maintenanceHubPage():requestRegistry();if($('#mrEdit'))$('#mrEdit').onclick=()=>requestForm(r.id);if($('#mrCancel'))$('#mrCancel').onclick=()=>{try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(r.id);requestDetail(r.id);toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}};
     if($('#mrOpenAsset')&&a)$('#mrOpenAsset').onclick=()=>assetProfile(a.id);
     if(typeof $$==='function')$$('[data-mr-related-wo]').forEach(row=>row.onclick=()=>{window.FLEET_MAINTENANCE_WORKORDER_API?.workOrderDetail?.(row.dataset.mrRelatedWo);});
     bindAttachmentViewers();
+    bindAttachmentActions(r.id);
   }
 
   window.FLEET_MAINTENANCE_REQUEST_TEST={
     ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
-    canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,requestRegistry,
+    canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,deleteAttachment,
+    renameAttachment,requestRegistry,
     requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
     meterWarningMessage,applyMeterWarning,statusLabel
   };
