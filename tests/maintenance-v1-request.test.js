@@ -1,364 +1,108 @@
-/* Maintenance Workflow v1 — Batch 4: MaintenanceRequest CRUD.
-   Additive-only. No approval workflow or WorkOrder creation in this batch. */
-(function(){
-  let requestPage=1;
-  let requestPageSize=20;
-  const norm=s=>String(s??'').trim().toLowerCase();
-  const role=()=>typeof CURRENT_ROLE==='string'?CURRENT_ROLE:'';
-  const knownRoles=new Set(['admin','manager','fleetOfficer','clerk','requester','viewer']);
-  const canView=()=>knownRoles.has(role());
-  const canCreate=()=>['admin','manager','fleetOfficer','requester'].includes(role());
-  const canEdit=()=>['admin','manager','fleetOfficer'].includes(role());
-  const canCancel=()=>['admin','manager','fleetOfficer'].includes(role());
-  const actor=()=>{
-    const r=role();
-    if(!r)return '';
-    const account=(STATE?.userAccounts||[]).find(x=>x&&x.role===r&&x.active!==false);
-    return account?.personId||r;
-  };
-  const actorPersonId=()=>{
-    const r=role();
-    if(!r)return '';
-    return (STATE?.userAccounts||[]).find(x=>x&&x.role===r&&x.active!==false)?.personId||'';
-  };
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
 
-  function ensureRequestState(){
-    if(typeof STATE!=='object'||!STATE)return;
-    STATE.maintenanceRequests??=[];
-    STATE.workOrders??=[];
-    STATE.vendors??=[];
-    STATE.people??=[];
-    STATE.assets??=[];
-    STATE.audit??=[];
-  }
+function loadRequest(role='admin',nodes={}){
+  const STATE={maintenanceRequests:[],workOrders:[],audit:[],vendors:[{id:'V1',name:'อู่ เอ',type:'external',active:true,deleted:false},{id:'V2',name:'อู่พักใช้',type:'external',active:false,deleted:false},{id:'V3',name:'อู่ลบแล้ว',type:'external',active:true,deleted:true},{id:'V4',name:'หน่วยซ่อมกลาง',type:'internal',active:true,deleted:false}],assets:[{id:'A1',code:'CAR-001',plate:'กข 1234',mileage:1000,meterUnit:'km',deleted:false}],people:[{id:'P1',name:'สมชาย',active:true},{id:'P2',name:'สมหญิง',active:true}],userAccounts:[{id:'U1',role:'requester',personId:'P1',active:true}],maintenance:[],pmPlans:[]};
+  const calls={audit:[],toast:[],forms:[]};let n=1;
+  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,FormData:global.FormData,FileReader:function(){},uid:p=>`${p}-${n++}`,now:()=>`2026-09-10T03:00:0${n}.000Z`,today:()=> '2026-09-10',pAudit:(...args)=>calls.audit.push(args),esc:v=>String(v??'').replace(/[&<>"']/g,''),money:n=>String(Number(n||0)),pill:s=>`<pill>${s}</pill>`,kv:(a,b)=>`${a}:${b}`,content:{innerHTML:''},dialog:{querySelector:()=>null},$:sel=>nodes[String(sel).replace('#','')]||null,$$:()=>[],setHead:()=>{},toast:m=>calls.toast.push(m),formModal:(title,html,submit)=>calls.forms.push({title,html,submit}),confirm:()=>true,setTimeout:fn=>fn()};
+  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),ctx);return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_REQUEST_TEST,nodes};
+}
+const valid={assetId:'A1',requestDate:'2026-09-10',requesterId:'P2',requesterName:'',issue:'เบรกมีเสียง',maintenanceType:'repair',urgency:'high',meterValue:'1001',proposedVendorId:'V1',estimatedCost:'1234.56',requestNote:'ตรวจด่วน'};
 
-  function activeVendors(){
-    ensureRequestState();
-    return STATE.vendors.filter(v=>v&&v.active===true&&v.deleted===false);
-  }
-  function activeAssets(){
-    ensureRequestState();
-    return STATE.assets.filter(a=>a&&!a.deleted);
-  }
-  function vendorById(id){ensureRequestState();return STATE.vendors.find(v=>v&&v.id===id)||null;}
-  function assetById(id){ensureRequestState();return STATE.assets.find(a=>a&&a.id===id&&!a.deleted)||null;}
-  function personById(id){ensureRequestState();return STATE.people.find(p=>p&&p.id===id&&p.active!==false)||null;}
+test('request number generation is sequential and unique',()=>{const {api,STATE}=loadRequest();STATE.maintenanceRequests.push({requestNo:'MR-0002'},{requestNo:'MR-0010'},{requestNo:'LEGACY'});assert.equal(api.nextRequestNo(),'MR-0011');const a=api.createRequest(valid),b=api.createRequest({...valid,issue:'ยางรั่ว'});assert.equal(a.requestNo,'MR-0011');assert.equal(b.requestNo,'MR-0012');assert.notEqual(a.requestNo,b.requestNo)});
 
-  function nextRequestNo(){
-    ensureRequestState();
-    let max=0;
-    const used=new Set();
-    for(const r of STATE.maintenanceRequests){
-      const no=String(r?.requestNo||'');used.add(no);
-      const m=no.match(/^MR-(\d+)$/i);if(m)max=Math.max(max,Number(m[1])||0);
-    }
-    let n=max+1,no;
-    do{no=`MR-${String(n++).padStart(4,'0')}`;}while(used.has(no));
-    return no;
-  }
+test('role permissions cover all six roles and fail closed for unknown or undefined',()=>{const expected={admin:[1,1,1],manager:[1,1,1],fleetOfficer:[1,1,1],clerk:[0,0,0],requester:[1,0,0],viewer:[0,0,0],mystery:[0,0,0]};for(const [r,e] of Object.entries(expected)){const {api}=loadRequest(r);assert.deepEqual([+api.canCreate(),+api.canEdit(),+api.canCancel()],e,r)}const x=loadRequest();x.ctx.CURRENT_ROLE=undefined;assert.deepEqual([x.api.canCreate(),x.api.canEdit(),x.api.canCancel()],[false,false,false]);assert.equal(x.api.role(),'')});
 
-  function hasWorkOrder(request){
-    ensureRequestState();
-    return (STATE.workOrders||[]).some(wo=>wo&&wo.sourceRequestId===request.id&&wo.status!=='cancelled');
-  }
-  function workOrderBadge(request){
-    const yes=hasWorkOrder(request);
-    return `<span class="pill ${yes?'ok':'warn'}">${yes?'มีแล้ว':'ยังไม่มี'}</span>`;
-  }
-  function statusLabel(s){return ({draft:'ร่าง',document_printed:'พิมพ์เอกสารแล้ว',approved:'อนุมัติ',rejected:'ไม่อนุมัติ',cancelled:'ยกเลิก'})[s]||s||'-';}
-  function urgencyLabel(s){return ({low:'ต่ำ',normal:'ปกติ',high:'สูง',critical:'เร่งด่วนมาก'})[s]||s||'-';}
-  function typeLabel(s){return ({repair:'ซ่อม',inspection:'ตรวจสอบ',service:'บำรุงรักษา'})[s]||s||'-';}
-  function assetLabelFor(a){if(!a)return '-';return a.plate||a.code||'(ไม่มีทะเบียน)';}
-  function meterWarningMessage(a,val){
-    const raw=String(val??'').trim();
-    return a&&raw!==''&&Number(raw)<Number(a.mileage||0)?`คำเตือน: มิเตอร์ที่กรอก (${raw}) ต่ำกว่ามิเตอร์ล่าสุดของทรัพย์สิน (${a.mileage||0}) — สามารถบันทึกได้แต่ควรตรวจสอบอีกครั้ง`:'';
-  }
-  function applyMeterWarning(warn,a,val){
-    const message=meterWarningMessage(a,val);
-    if(warn){warn.textContent=message;warn.classList?.toggle('warn-box',Boolean(message));}
-    return message;
-  }
+test('CRUD enforcement blocks unauthorized roles and requester can create only own request',()=>{for(const r of ['clerk','viewer','mystery']){const {api}=loadRequest(r);assert.throws(()=>api.createRequest(valid),/ไม่มีสิทธิ์สร้าง/)}const req=loadRequest('requester');const x=req.api.createRequest({...valid,requesterId:'P2'});assert.equal(x.requesterId,'P1');assert.equal(x.requesterNameSnapshot,'สมชาย');assert.throws(()=>req.api.editRequest(x.id,valid),/ไม่มีสิทธิ์แก้ไข/);assert.throws(()=>req.api.cancelRequest(x.id),/ไม่มีสิทธิ์ยกเลิก/)});
 
-  function validateVendor(id){
-    const vendorId=String(id||'').trim();
-    if(!vendorId)return null;
-    const v=STATE.vendors.find(x=>x&&x.id===vendorId&&x.active===true&&x.deleted===false)||null;
-    if(!v)throw Error('ผู้ให้บริการที่เลือกไม่พร้อมใช้งาน กรุณาเลือกใหม่');
-    return v;
-  }
+test('Vendor dropdown source includes only active non-deleted rows and submit revalidates',()=>{const {api,STATE}=loadRequest();assert.deepEqual(Array.from(api.activeVendors(),v=>v.id),['V1','V4']);const x=api.createRequest(valid);assert.equal(x.proposedVendorId,'V1');assert.equal(x.proposedVendorNameSnapshot,'อู่ เอ');for(const id of ['V2','V3'])assert.throws(()=>api.createRequest({...valid,proposedVendorId:id}),/ไม่พร้อมใช้งาน/);STATE.vendors.find(v=>v.id==='V1').active=false;assert.throws(()=>api.editRequest(x.id,{...valid,proposedVendorId:'V1'}),/ไม่พร้อมใช้งาน/)});
 
-  function normalizeAttachments(value){return Array.isArray(value)?value:[];}
-  async function readSelectedFiles(){
-    const input=typeof dialog!=='undefined'&&dialog?.querySelector?dialog.querySelector('[name=requestAttachments]'):null;
-    const files=[...(input?.files||[])];
-    if(!files.length)return [];
-    const read=file=>new Promise((resolve,reject)=>{
-      const fr=new FileReader();fr.onload=()=>resolve({id:uid('ATT'),name:file.name,type:file.type||'',size:Number(file.size)||0,data:String(fr.result||''),createdAt:now()});fr.onerror=()=>reject(fr.error||Error('อ่านไฟล์ไม่สำเร็จ'));fr.readAsDataURL(file);
-    });
-    return Promise.all(files.map(read));
-  }
+test('create edit cancel use pAudit with maintenanceRequest entity',()=>{const {api,calls}=loadRequest();const x=api.createRequest(valid);api.editRequest(x.id,{...valid,issue:'แก้ไขอาการ'});api.cancelRequest(x.id);assert.equal(calls.audit.length,3);for(const a of calls.audit){assert.equal(a[1],'maintenanceRequest');assert.equal(a[2],x.id)}assert.deepEqual(calls.audit.map(a=>a[0]),['สร้างคำขอซ่อม','แก้ไขคำขอซ่อม','ยกเลิกคำขอซ่อม'])});
 
-  function audit(action,id,before,after){
-    if(typeof pAudit!=='function')throw Error('Audit service ไม่พร้อมใช้งาน');
-    pAudit(action,'maintenanceRequest',id,before,after);
-  }
+test('editRequest permits document_printed but still blocks approved rejected and cancelled',()=>{const allowed=loadRequest();const x=allowed.api.createRequest(valid);x.status='document_printed';const edited=allowed.api.editRequest(x.id,{...valid,issue:'ข้อมูลแก้ไขก่อนพิมพ์ v2'});assert.equal(edited.issue,'ข้อมูลแก้ไขก่อนพิมพ์ v2');assert.equal(edited.status,'document_printed');for(const status of ['approved','rejected','cancelled']){const y=loadRequest();const r=y.api.createRequest(valid);r.status=status;assert.throws(()=>y.api.editRequest(r.id,{...valid,issue:'ห้ามแก้'}),/เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น/,status)}});
 
-  function buildRequestPayload(p,old=null,extraAttachments=[]){
-    ensureRequestState();
-    const assetId=String(p.assetId||'').trim();
-    const asset=assetById(assetId);if(!asset)throw Error('กรุณาเลือกทรัพย์สินที่ใช้งานอยู่');
-    const vendor=validateVendor(p.proposedVendorId);
-    let requesterId=String(p.requesterId||'').trim();
-    let requesterName=String(p.requesterName||'').trim();
-    if(role()==='requester'){
-      const own=actorPersonId();
-      if(own){requesterId=own;requesterName=personById(own)?.name||requesterName;}
-      else requesterId='';
-    }
-    const person=requesterId?personById(requesterId):null;
-    if(requesterId&&!person)throw Error('ไม่พบข้อมูลผู้แจ้งที่เลือก');
-    const requesterNameSnapshot=String(person?.name||requesterName||'').trim();
-    if(!requesterNameSnapshot)throw Error('กรุณาระบุผู้แจ้ง');
-    const issue=String(p.issue||'').trim();if(!issue)throw Error('กรุณาระบุปัญหา/อาการ');
-    const requestDate=String(p.requestDate||'').trim();if(!requestDate)throw Error('กรุณาระบุวันที่แจ้ง');
-    const maintenanceType=String(p.maintenanceType||'repair');
-    const urgency=String(p.urgency||'normal');
-    const meterRaw=String(p.meterValue??'').trim();
-    const estimatedRaw=String(p.estimatedCost??'').trim();
-    return {
-      assetId,requestDate,requesterId,
-      requesterNameSnapshot,issue,maintenanceType,urgency,
-      meterValue:meterRaw===''?'':Number(meterRaw),
-      proposedVendorId:vendor?.id||'',
-      proposedVendorNameSnapshot:vendor?.name||'',
-      estimatedCost:estimatedRaw===''?0:Number(estimatedRaw)||0,
-      requestNote:String(p.requestNote||'').trim(),
-      attachments:[...normalizeAttachments(old?.attachments),...extraAttachments]
-    };
-  }
+test('requestForm permits document_printed so versioning can edit before v2 while blocking final statuses',()=>{const x=loadRequest();const r=x.api.createRequest(valid);r.status='document_printed';x.api.requestForm(r.id);assert.equal(x.calls.forms.length,1);assert.match(x.calls.forms[0].title,/แก้ไขคำขอ/);for(const status of ['approved','rejected','cancelled']){const y=loadRequest();const q=y.api.createRequest(valid);q.status=status;y.api.requestForm(q.id);assert.equal(y.calls.forms.length,0);assert.match(y.calls.toast.at(-1),/เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น/)}});
 
-  function createRequest(p,extraAttachments=[]){
-    if(!canCreate())throw Error('บทบาทนี้ไม่มีสิทธิ์สร้างคำขอซ่อม');
-    ensureRequestState();
-    const payload=buildRequestPayload(p,null,extraAttachments);
-    const ts=now(),by=actor();
-    const x={id:uid('MR'),requestNo:nextRequestNo(),...payload,status:'draft',createdAt:ts,updatedAt:ts,createdBy:by,updatedBy:by};
-    STATE.maintenanceRequests.push(x);
-    audit('สร้างคำขอซ่อม',x.id,null,structuredClone(x));
-    return x;
-  }
+test('request statusLabel maps all five workflow statuses',()=>{const {api}=loadRequest();assert.deepEqual(['draft','document_printed','approved','rejected','cancelled'].map(s=>api.statusLabel(s)),['ร่าง','พิมพ์เอกสารแล้ว','อนุมัติ','ไม่อนุมัติ','ยกเลิก']);assert.equal(api.statusLabel('custom'),'custom');assert.equal(api.statusLabel(''),'-')});
 
-  function editRequest(id,p,extraAttachments=[]){
-    if(!canEdit())throw Error('บทบาทนี้ไม่มีสิทธิ์แก้ไขคำขอซ่อม');
-    ensureRequestState();
-    const x=STATE.maintenanceRequests.find(r=>r&&r.id===id);if(!x)throw Error('ไม่พบคำขอซ่อม');
-    if(!['draft','document_printed'].includes(x.status))throw Error('แก้ไขได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น');
-    const before=structuredClone(x),payload=buildRequestPayload(p,x,extraAttachments);
-    Object.assign(x,payload,{updatedAt:now(),updatedBy:actor()});
-    audit('แก้ไขคำขอซ่อม',x.id,before,structuredClone(x));
-    return x;
-  }
+test('registry renders Thai label matching each real request status',()=>{const nodes={mrRows:{innerHTML:''},mrQ:{value:''},mrStatus:{value:''},mrUrgency:{value:''},mrSize:{value:'20'}};const {api,STATE}=loadRequest('admin',nodes);for(const [i,status] of ['draft','document_printed','approved','rejected','cancelled'].entries())STATE.maintenanceRequests.push({id:`R${i}`,requestNo:`MR-000${i+1}`,assetId:'A1',requestDate:'2026-09-10',requesterNameSnapshot:'สมชาย',issue:`งาน ${i}`,urgency:'normal',proposedVendorNameSnapshot:'อู่ เอ',estimatedCost:100,status});api.renderRequestRows();for(const label of ['ร่าง','พิมพ์เอกสารแล้ว','อนุมัติ','ไม่อนุมัติ','ยกเลิก'])assert.match(nodes.mrRows.innerHTML,new RegExp(label));assert.match(nodes.mrRows.innerHTML,/data-mr-edit="R1"/);assert.doesNotMatch(nodes.mrRows.innerHTML,/data-mr-cancel="R1"/)});
 
-  function cancelRequest(id){
-    if(!canCancel())throw Error('บทบาทนี้ไม่มีสิทธิ์ยกเลิกคำขอซ่อม');
-    ensureRequestState();
-    const x=STATE.maintenanceRequests.find(r=>r&&r.id===id);if(!x)throw Error('ไม่พบคำขอซ่อม');
-    if(x.status!=='draft')throw Error('ยกเลิกได้เฉพาะคำขอที่เป็นร่าง');
-    const before=structuredClone(x);x.status='cancelled';x.updatedAt=now();x.updatedBy=actor();
-    audit('ยกเลิกคำขอซ่อม',x.id,before,structuredClone(x));
-    return x;
-  }
+test('cancel guard permits draft only',()=>{for(const status of ['document_printed','approved','rejected','cancelled']){const {api}=loadRequest();const x=api.createRequest(valid);x.status=status;assert.throws(()=>api.cancelRequest(x.id),/เฉพาะคำขอที่เป็นร่าง/)}const {api}=loadRequest();const x=api.createRequest(valid);assert.equal(api.cancelRequest(x.id).status,'cancelled')});
 
-  function assertAttachmentMutable(x){
-    if(!canEdit())throw Error('บทบาทนี้ไม่มีสิทธิ์แก้ไขคำขอซ่อม');
-    if(!['draft','document_printed'].includes(x.status))throw Error('แก้ไขไฟล์แนบได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น');
-  }
-  function deleteAttachment(requestId,attachmentId){
-    ensureRequestState();
-    const x=STATE.maintenanceRequests.find(r=>r&&r.id===requestId);if(!x)throw Error('ไม่พบคำขอซ่อม');
-    assertAttachmentMutable(x);
-    const before=structuredClone(x);
-    x.attachments=(x.attachments||[]).filter(a=>a&&a.id!==attachmentId);
-    x.updatedAt=now();x.updatedBy=actor();
-    audit('ลบไฟล์แนบ',x.id,before,structuredClone(x));
-    return x;
-  }
-  function renameAttachment(requestId,attachmentId,newName){
-    ensureRequestState();
-    const x=STATE.maintenanceRequests.find(r=>r&&r.id===requestId);if(!x)throw Error('ไม่พบคำขอซ่อม');
-    assertAttachmentMutable(x);
-    const name=String(newName||'').trim();if(!name)throw Error('กรุณาระบุชื่อไฟล์');
-    const att=(x.attachments||[]).find(a=>a&&a.id===attachmentId);if(!att)throw Error('ไม่พบไฟล์แนบ');
-    const before=structuredClone(x);
-    att.name=name;
-    x.updatedAt=now();x.updatedBy=actor();
-    audit('แก้ไขชื่อไฟล์แนบ',x.id,before,structuredClone(x));
-    return x;
-  }
+test('computed Work Order badge derives from STATE.workOrders and ignores cancelled WO',()=>{const {api,STATE}=loadRequest();const r={id:'MR-X'};assert.equal(api.hasWorkOrder(r),false);assert.match(api.workOrderBadge(r),/ยังไม่มี/);STATE.workOrders.push({id:'WO1',sourceRequestId:'MR-X',status:'cancelled'});assert.equal(api.hasWorkOrder(r),false);STATE.workOrders.push({id:'WO2',sourceRequestId:'MR-X',status:'open'});assert.equal(api.hasWorkOrder(r),true);assert.match(api.workOrderBadge(r),/มีแล้ว/)});
 
-  function peopleOptions(selected=''){
-    ensureRequestState();
-    return '<option value="">- กรอกชื่อผู้แจ้งเอง -</option>'+STATE.people.filter(p=>p&&p.active!==false).map(p=>`<option value="${esc(p.id)}" ${String(p.id)===String(selected)?'selected':''}>${esc(p.name||p.code||p.id)}</option>`).join('');
-  }
-  function assetOptions(selected=''){
-    return '<option value="">- เลือกทรัพย์สิน -</option>'+activeAssets().map(a=>`<option value="${esc(a.id)}" ${String(a.id)===String(selected)?'selected':''}>${esc(assetLabelFor(a))}</option>`).join('');
-  }
-  function vendorOptions(selected=''){
-    return '<option value="">- ไม่ระบุผู้ให้บริการ -</option>'+activeVendors().map(v=>`<option value="${esc(v.id)}" ${String(v.id)===String(selected)?'selected':''}>${esc(`${v.type==='internal'?'[ภายใน]':'[ภายนอก]'} ${v.name}`)}</option>`).join('');
-  }
+test('MaintenanceRequest model has no embedded approval or convertedWorkOrderId',()=>{const {api}=loadRequest();const x=api.createRequest(valid);for(const k of ['id','requestNo','assetId','requestDate','requesterId','requesterNameSnapshot','issue','maintenanceType','urgency','meterValue','proposedVendorId','proposedVendorNameSnapshot','estimatedCost','requestNote','attachments','status','createdAt','updatedAt','createdBy','updatedBy'])assert.ok(Object.hasOwn(x,k),k);assert.equal(Object.hasOwn(x,'convertedWorkOrderId'),false);assert.equal(Object.hasOwn(x,'approval'),false);assert.equal(x.status,'draft');assert.ok(Array.isArray(x.attachments))});
 
-  function requestForm(id='',prefill={}){
-    if(id){if(!canEdit())return toast('บทบาทนี้ไม่มีสิทธิ์แก้ไขคำขอซ่อม',true);}else if(!canCreate())return toast('บทบาทนี้ไม่มีสิทธิ์สร้างคำขอซ่อม',true);
-    ensureRequestState();
-    const old=id?STATE.maintenanceRequests.find(r=>r&&r.id===id):null;
-    if(id&&!old)return toast('ไม่พบคำขอซ่อม',true);
-    if(old&&!['draft','document_printed'].includes(old.status))return toast('แก้ไขได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น',true);
-    const ownPerson=role()==='requester'?actorPersonId():'';
-    const requesterId=ownPerson||old?.requesterId||'';
-    const requesterName=ownPerson?(personById(ownPerson)?.name||old?.requesterNameSnapshot||''):(old?.requesterId?'':old?.requesterNameSnapshot||'');
-    const html=`
-      <div class="wide"><h3>A. ข้อมูลคำขอ</h3></div>
-      <label>วันที่แจ้ง<input name="requestDate" type="date" required value="${esc(old?.requestDate||today())}"></label>
-      <label>ผู้แจ้ง<select name="requesterId" ${ownPerson?'disabled':''}>${peopleOptions(requesterId)}</select>${ownPerson?`<input type="hidden" name="requesterId" value="${esc(ownPerson)}">`:''}</label>
-      <label>ชื่อผู้แจ้ง (กรณีไม่มีในทะเบียน)<input name="requesterName" value="${esc(requesterName)}" ${ownPerson?'readonly':''}></label>
-      <label>ความเร่งด่วน<select name="urgency"><option value="low" ${old?.urgency==='low'?'selected':''}>ต่ำ</option><option value="normal" ${!old||old.urgency==='normal'?'selected':''}>ปกติ</option><option value="high" ${old?.urgency==='high'?'selected':''}>สูง</option><option value="critical" ${old?.urgency==='critical'?'selected':''}>เร่งด่วนมาก</option></select></label>
-      <label>ประเภทงาน<select name="maintenanceType"><option value="repair" ${!old||old.maintenanceType==='repair'?'selected':''}>ซ่อม</option><option value="inspection" ${old?.maintenanceType==='inspection'?'selected':''}>ตรวจสอบ</option><option value="service" ${old?.maintenanceType==='service'?'selected':''}>บำรุงรักษา</option></select></label>
-      <div class="wide"><h3>B. รถ/เครื่องจักร</h3></div>
-      <label>ทรัพย์สิน<select name="assetId" required>${assetOptions(old?.assetId||(!old&&prefill?.assetId)||'')}</select></label>
-      <div class="wide notice-row" id="mrAssetInfo"><span>เลือกทรัพย์สินเพื่อดูข้อมูล</span></div>
-      <label>เลขไมล์/ชั่วโมง<input name="meterValue" type="number" step="0.01" value="${esc(old?.meterValue??'')}"></label>
-      <div class="wide muted" id="mrMeterWarn"></div>
-      <div class="wide"><h3>C. ปัญหา/อาการ</h3></div>
-      <label class="wide">ปัญหา/อาการ<textarea name="issue" required>${esc(old?.issue||'')}</textarea></label>
-      <label class="wide">หมายเหตุคำขอ<textarea name="requestNote">${esc(old?.requestNote||'')}</textarea></label>
-      <div class="wide"><h3>D. ข้อเสนอซ่อม</h3></div>
-      <label>ผู้ให้บริการ / อู่ที่เสนอ<select name="proposedVendorId">${vendorOptions(old?.proposedVendorId||'')}</select></label>
-      <label>ประมาณการ<input name="estimatedCost" type="number" min="0" step="0.01" value="${esc(old?.estimatedCost??0)}"></label>
-      <div class="wide"><h3>E. รูป/ไฟล์ประกอบ</h3></div>
-      <label class="wide">เพิ่มไฟล์<input name="requestAttachments" type="file" multiple></label>
-      <div class="wide muted">${old?.attachments?.length?`มีไฟล์เดิม ${old.attachments.length} ไฟล์ — ไฟล์ใหม่จะถูกเพิ่มต่อท้าย`:'ยังไม่มีไฟล์แนบ'}</div>`;
-    formModal(old?`แก้ไขคำขอ ${old.requestNo}`:'เพิ่มคำขอซ่อม',html,async p=>{
-      const files=await readSelectedFiles();
-      return old?editRequest(old.id,p,files):createRequest(p,files);
-    });
-    setTimeout(()=>{
-      const assetSel=dialog?.querySelector?.('[name=assetId]'),meter=dialog?.querySelector?.('[name=meterValue]'),info=$('#mrAssetInfo'),warn=$('#mrMeterWarn');
-      const draw=()=>{
-        const a=assetById(assetSel?.value||'');
-        if(info)info.innerHTML=a?`<b>${esc(assetLabelFor(a))}</b><span>${esc(a.brandName||'')} ${esc(a.modelName||'')} · มิเตอร์ล่าสุด ${esc(a.mileage??0)} ${a.meterUnit==='hour'?'ชม.':'กม.'}</span>`:'<span>เลือกทรัพย์สินเพื่อดูข้อมูล</span>';
-        applyMeterWarning(warn,a,meter?.value);
-      };
-      if(assetSel)assetSel.onchange=draw;if(meter)meter.oninput=draw;draw();
-    },0);
-  }
+function loadHub(){const calls=[];const legacyBatch2=function batch2Page(){calls.push('legacy-batch2')};const nodes={maintenanceHubBody:{innerHTML:''},hubNewPM:{}};const content={innerHTML:''};const requestApi={requestRegistry:target=>{target.innerHTML='<div>REGISTRY</div>';calls.push('registry')}};const ctx={window:null,console,STATE:{maintenance:[],pmPlans:[],workOrders:[]},CURRENT_ROLE:'admin',maintenancePage:legacyBatch2,content,setHead:()=>{},$:s=>nodes[String(s).replace('#','')]||null,$$:()=>[],simpleTable:()=>'<table></table>',assetLabel:id=>id,pmForm:()=>calls.push('pm'),FLEET_MAINTENANCE_REQUEST_TEST:requestApi,CALLS:calls};ctx.window=ctx;vm.createContext(ctx);vm.runInContext("var view='dashboard'; function dashboardPage(){CALLS.push('dashboard')} function render(){const map={dashboard:dashboardPage,maintenance:maintenancePage};return (map[view]||dashboardPage)()}",ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-hub.js','utf8'),ctx);return {ctx,calls,legacyBatch2,api:ctx.FLEET_MAINTENANCE_HUB_TEST}};
 
-  function renderRequestRows(){
-    ensureRequestState();
-    const box=$('#mrRows');if(!box)return;
-    const q=norm($('#mrQ')?.value),status=$('#mrStatus')?.value||'',urgency=$('#mrUrgency')?.value||'';
-    requestPageSize=Number($('#mrSize')?.value||requestPageSize)||20;
-    let rows=STATE.maintenanceRequests.slice().sort((a,b)=>String(b.requestNo||'').localeCompare(String(a.requestNo||'')));
-    if(status)rows=rows.filter(r=>r.status===status);if(urgency)rows=rows.filter(r=>r.urgency===urgency);
-    if(q)rows=rows.filter(r=>{const a=assetById(r.assetId);return norm(`${r.requestNo} ${r.requestDate} ${assetLabelFor(a)} ${r.requesterNameSnapshot} ${r.issue} ${r.proposedVendorNameSnapshot}`).includes(q)});
-    const pages=Math.max(1,Math.ceil(rows.length/requestPageSize));requestPage=Math.min(Math.max(1,requestPage),pages);
-    const start=(requestPage-1)*requestPageSize,show=rows.slice(start,start+requestPageSize);
-    box.innerHTML=show.length?`<table><thead><tr><th>เลขที่คำขอ</th><th>วันที่</th><th>ทรัพย์สิน-ทะเบียน</th><th>ผู้แจ้ง</th><th>อาการ</th><th>ความเร่งด่วน</th><th>อู่ที่เสนอ</th><th>ประมาณการ</th><th>สถานะ</th><th>มี Work Order แล้วหรือไม่</th><th>จัดการ</th></tr></thead><tbody>${show.map(r=>`<tr data-mr-row="${esc(r.id)}"><td><b>${esc(r.requestNo)}</b></td><td>${esc(r.requestDate||'-')}</td><td>${esc(assetLabelFor(assetById(r.assetId)))}</td><td>${esc(r.requesterNameSnapshot||'-')}</td><td>${esc(r.issue||'-')}</td><td>${esc(urgencyLabel(r.urgency))}</td><td>${esc(r.proposedVendorNameSnapshot||'-')}</td><td>${money(r.estimatedCost)}</td><td>${pill(r.status)} ${esc(statusLabel(r.status))}</td><td>${workOrderBadge(r)}</td><td>${canEdit()&&['draft','document_printed'].includes(r.status)?`<button class="btn sm" data-mr-edit="${esc(r.id)}">แก้ไข</button>`:''}${canCancel()&&r.status==='draft'?` <button class="btn sm" data-mr-cancel="${esc(r.id)}">ยกเลิก</button>`:''}</td></tr>`).join('')}</tbody></table><div class="toolbar"><span class="muted">${rows.length} รายการ · หน้า ${requestPage}/${pages}</span><div><button class="btn sm" id="mrPrev" ${requestPage<=1?'disabled':''}>← ก่อนหน้า</button> <button class="btn sm" id="mrNext" ${requestPage>=pages?'disabled':''}>ถัดไป →</button></div></div>`:'<div class="empty">ยังไม่มีคำขอซ่อม</div>';
-    $$('[data-mr-row]').forEach(r=>r.onclick=()=>requestDetail(r.dataset.mrRow));
-    $$('[data-mr-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();requestForm(b.dataset.mrEdit)});
-    $$('[data-mr-cancel]').forEach(b=>b.onclick=e=>{e.stopPropagation();try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(b.dataset.mrCancel);renderRequestRows();toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}});
-    if($('#mrPrev'))$('#mrPrev').onclick=()=>{requestPage--;renderRequestRows()};if($('#mrNext'))$('#mrNext').onclick=()=>{requestPage++;renderRequestRows()};
-  }
+test('maintenancePage captures Batch 2 patched page then reassigns to hub',()=>{const {ctx,legacyBatch2,api}=loadHub();assert.equal(api.capturedLegacyMaintenancePage,legacyBatch2);assert.notEqual(ctx.maintenancePage,legacyBatch2);assert.equal(ctx.maintenancePage,api.maintenanceHubPage);assert.equal(api.getTab(),'requests')});
 
-  function requestRegistry(target=content){
-    if(!canView())return target.innerHTML='<div class="panel"><div class="empty">บทบาทนี้ไม่มีสิทธิ์ดูคำขอซ่อม</div></div>';
-    ensureRequestState();
-    target.innerHTML=`<div class="panel"><div class="toolbar"><div><h3>Maintenance Request Registry</h3><div class="muted">คำขอแจ้งซ่อมก่อนเข้าสู่ขั้นตอนจัดทำเอกสารอนุมัติ</div></div>${canCreate()?'<button class="btn primary" id="newMR">+ คำขอซ่อม</button>':''}</div><div class="toolbar"><div class="left"><input id="mrQ" placeholder="ค้นหาเลขที่ / ทรัพย์สิน / ผู้แจ้ง / อาการ / อู่"><select id="mrStatus"><option value="">ทุกสถานะ</option><option value="draft">ร่าง</option><option value="cancelled">ยกเลิก</option></select><select id="mrUrgency"><option value="">ทุกความเร่งด่วน</option><option value="low">ต่ำ</option><option value="normal">ปกติ</option><option value="high">สูง</option><option value="critical">เร่งด่วนมาก</option></select><select id="mrSize"><option>10</option><option selected>20</option><option>50</option></select><button class="btn" id="mrClear">ล้างตัวกรอง</button></div></div><div id="mrRows"></div></div>`;
-    if($('#newMR'))$('#newMR').onclick=()=>requestForm();
-    $('#mrQ').oninput=()=>{requestPage=1;renderRequestRows()};$('#mrStatus').onchange=()=>{requestPage=1;renderRequestRows()};$('#mrUrgency').onchange=()=>{requestPage=1;renderRequestRows()};$('#mrSize').onchange=()=>{requestPage=1;renderRequestRows()};$('#mrClear').onclick=()=>{$('#mrQ').value='';$('#mrStatus').value='';$('#mrUrgency').value='';$('#mrSize').value='20';requestPage=1;renderRequestRows()};renderRequestRows();
-  }
+test('regression isolation keeps non-maintenance render delegation unchanged',()=>{const {ctx,calls}=loadHub();ctx.view='dashboard';ctx.render();assert.equal(calls.at(-1),'dashboard')});
 
-  function closeAttachmentViewer(){
-    const old=typeof document!=='undefined'?document.getElementById?.('mrViewerOverlay'):null;
-    if(old&&old.remove)old.remove();
-  }
-  function openAttachmentViewer(a){
-    if(typeof document==='undefined'||!document.body||!a?.data)return;
-    closeAttachmentViewer();
-    const isImg=String(a.type||'').startsWith('image/');
-    const name=esc(a.name||(isImg?'รูป':'ไฟล์'));
-    const bodyHtml=isImg?`<img src="${esc(a.data)}" alt="${name}">`:`<iframe src="${esc(a.data)}" title="${name}"></iframe>`;
-    const overlay=document.createElement('div');
-    overlay.id='mrViewerOverlay';
-    overlay.className='v48-viewer';
-    overlay.innerHTML=`<div class="v48-viewer-card"><div class="v48-viewer-head"><div><b>${name}</b></div><button type="button" data-mr-viewer-close>×</button></div><div class="v48-viewer-body">${bodyHtml}</div><div class="v48-viewer-foot"><a class="btn" href="${esc(a.data)}" download="${esc(a.name||'attachment')}">ดาวน์โหลดไฟล์</a><button type="button" class="btn primary" data-mr-viewer-close>ปิด</button></div></div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click',e=>{if(e.target===overlay)closeAttachmentViewer();});
-    overlay.querySelectorAll?.('[data-mr-viewer-close]').forEach(b=>b.addEventListener('click',closeAttachmentViewer));
-  }
-  let mrAttachmentRegistry=[];
-  function attachmentHtml(a,mutable){
-    if(!a)return '';
-    const idx=mrAttachmentRegistry.length;
-    mrAttachmentRegistry.push(a);
-    const actions=mutable?`<div class="thumb-actions"><button type="button" class="btn sm" data-mr-attachment-edit="${esc(a.id)}">แก้ไข</button> <button type="button" class="btn sm" data-mr-attachment-delete="${esc(a.id)}">ลบ</button></div>`:'';
-    if(String(a.type||'').startsWith('image/')&&a.data)return `<div class="thumb-wrap"><div class="thumb"><img src="${esc(a.data)}" data-mr-attachment-view="${idx}" style="cursor:pointer"><small>${esc(a.name||'รูป')}</small></div>${actions}</div>`;
-    return a.data?`<div class="thumb-wrap"><div class="thumb"><button type="button" class="btn sm" data-mr-attachment-view="${idx}">${esc(a.name||'ไฟล์')}</button></div>${actions}</div>`:`<span>${esc(a.name||'ไฟล์')}</span>${actions}`;
-  }
-  function bindAttachmentViewers(){
-    if(typeof $$!=='function')return;
-    $$('[data-mr-attachment-view]').forEach(el=>{
-      el.onclick=()=>openAttachmentViewer(mrAttachmentRegistry[Number(el.dataset.mrAttachmentView)]);
-    });
-  }
-  function bindAttachmentActions(requestId){
-    if(typeof $$!=='function')return;
-    $$('[data-mr-attachment-edit]').forEach(el=>{
-      el.onclick=()=>{
-        const attId=el.dataset.mrAttachmentEdit;
-        const current=(STATE.maintenanceRequests.find(r=>r&&r.id===requestId)?.attachments||[]).find(a=>a&&a.id===attId);
-        formModal('แก้ไขชื่อไฟล์แนบ',`<label class="wide">ชื่อไฟล์<input name="name" required value="${esc(current?.name||'')}"></label>`,p=>{
-          const x=renameAttachment(requestId,attId,p.name);
-          setTimeout(()=>requestDetail(requestId),0);
-          return x;
-        });
-      };
-    });
-    $$('[data-mr-attachment-delete]').forEach(el=>{
-      el.onclick=()=>{
-        try{
-          if(typeof confirm==='function'&&!confirm('ยืนยันลบไฟล์แนบนี้?'))return;
-          deleteAttachment(requestId,el.dataset.mrAttachmentDelete);
-          requestDetail(requestId);
-          toast('ลบไฟล์แนบแล้ว');
-        }catch(x){toast(x.message||String(x),true)}
-      };
-    });
-  }
+test('hub permission is fail closed when role is undefined',()=>{const {ctx,api}=loadHub();ctx.CURRENT_ROLE=undefined;assert.equal(api.canView(),false)});
 
-  function requestDetail(id){
-    if(!canView())return toast('บทบาทนี้ไม่มีสิทธิ์ดูคำขอซ่อม',true);
-    ensureRequestState();const r=STATE.maintenanceRequests.find(x=>x&&x.id===id);if(!r)return requestRegistry();
-    const a=assetById(r.assetId),wos=(STATE.workOrders||[]).filter(wo=>wo&&wo.sourceRequestId===r.id),logs=STATE.audit.filter(x=>x&&x.entity==='maintenanceRequest'&&x.recordId===r.id);
-    mrAttachmentRegistry=[];
-    const canOpenAsset=Boolean(a)&&typeof assetProfile!=='undefined';
-    const assetFieldHtml=kv('ทรัพย์สิน',assetLabelFor(a))+(canOpenAsset?'<button type="button" class="btn sm" id="mrOpenAsset" style="margin-left:-8px">เปิดดูทรัพย์สิน</button>':'');
-    setHead(r.requestNo,'Maintenance Request Detail');
-    const attachMutable=canEdit()&&['draft','document_printed'].includes(r.status);
-    content.innerHTML=`<div class="panel"><div class="toolbar"><button class="btn" id="mrBack">← กลับทะเบียน</button><div>${canEdit()&&['draft','document_printed'].includes(r.status)?'<button class="btn" id="mrEdit">แก้ไข</button>':''}${canCancel()&&r.status==='draft'?' <button class="btn" id="mrCancel">ยกเลิกคำขอ</button>':''}</div></div><div class="hero-info">${kv('เลขที่คำขอ',r.requestNo)}${assetFieldHtml}${kv('สถานะ',statusLabel(r.status))}${kv('ความเร่งด่วน',urgencyLabel(r.urgency))}${kv('ประมาณการ',`฿${money(r.estimatedCost)}`)}${kv('Work Order',hasWorkOrder(r)?'มีแล้ว':'ยังไม่มี')}</div></div>
-      <div class="grid2"><div class="panel"><h3>ข้อมูลคำขอ</h3><div class="grid3">${kv('วันที่แจ้ง',r.requestDate)}${kv('ผู้แจ้ง',r.requesterNameSnapshot)}${kv('ประเภทงาน',typeLabel(r.maintenanceType))}${kv('มิเตอร์',r.meterValue===''?'-':r.meterValue)}${kv('อู่ที่เสนอ',r.proposedVendorNameSnapshot||'-')}${kv('ประมาณการ',money(r.estimatedCost))}</div><h4>ปัญหา/อาการ</h4><p>${esc(r.issue||'-')}</p><h4>หมายเหตุ</h4><p>${esc(r.requestNote||'-')}</p></div><div class="panel"><h3>ไฟล์ / รูป</h3><div class="thumb-row">${(r.attachments||[]).map(a=>attachmentHtml(a,attachMutable)).join('')||'<div class="empty">ยังไม่มีไฟล์แนบ</div>'}</div></div></div>
-      <div class="grid2"><div class="panel"><h3>งานซ่อมที่เกี่ยวข้อง</h3>${wos.length?`<table><thead><tr><th>เลขที่</th><th>สถานะ</th></tr></thead><tbody>${wos.map(wo=>`<tr data-mr-related-wo="${esc(wo.id)}" style="cursor:pointer"><td>${esc(wo.workOrderNo||wo.no||wo.id)}</td><td>${esc(wo.status||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีงานซ่อมที่เกี่ยวข้อง</div>'}</div><div class="panel"><h3>ประวัติ / Audit</h3>${logs.map(l=>`<div class="timeline-row"><b>${esc(l.action||'-')}</b><span>${esc(l.ts||'')} · ${esc(l.user||'')}</span></div>`).join('')||'<div class="empty">ยังไม่มีประวัติ</div>'}</div></div>`;
-    $('#mrBack').onclick=()=>window.FLEET_MAINTENANCE_HUB_TEST?.maintenanceHubPage?window.FLEET_MAINTENANCE_HUB_TEST.maintenanceHubPage():requestRegistry();if($('#mrEdit'))$('#mrEdit').onclick=()=>requestForm(r.id);if($('#mrCancel'))$('#mrCancel').onclick=()=>{try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(r.id);requestDetail(r.id);toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}};
-    if($('#mrOpenAsset')&&a)$('#mrOpenAsset').onclick=()=>assetProfile(a.id);
-    if(typeof $$==='function')$$('[data-mr-related-wo]').forEach(row=>row.onclick=()=>{window.FLEET_MAINTENANCE_WORKORDER_API?.workOrderDetail?.(row.dataset.mrRelatedWo);});
-    bindAttachmentViewers();
-    bindAttachmentActions(r.id);
-  }
+test('Batch 4 integration stays additive and scripts load after Legacy Vendor Patch',()=>{const request=fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),hub=fs.readFileSync('src/renderer/app/maintenance-v1-hub.js','utf8'),index=fs.readFileSync('index.html','utf8');for(const src of [request,hub])assert.doesNotMatch(src,/assetProfile\s*=|assetForm\s*=|documentPage\s*=|NAV\.push|PARITY_MENU\[/);assert.match(index,/maintenance-v1-legacy-vendor-patch\.js[\s\S]*maintenance-v1-request\.js[\s\S]*maintenance-v1-hub\.js/)});
 
-  window.FLEET_MAINTENANCE_REQUEST_TEST={
-    ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
-    canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,deleteAttachment,
-    renameAttachment,attachmentHtml,requestRegistry,
-    requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
-    meterWarningMessage,applyMeterWarning,statusLabel
-  };
-})();
+test('deleteAttachment removes attachment when status draft/document_printed and blocked otherwise',()=>{
+  const {api,STATE}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'photo.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'},{id:'ATT2',name:'report.pdf',type:'application/pdf',data:'data:application/pdf;base64,BBB'}];
+  api.deleteAttachment(x.id,'ATT1');
+  assert.deepEqual(x.attachments.map(a=>a.id),['ATT2']);
+  x.status='approved';
+  assert.throws(()=>api.deleteAttachment(x.id,'ATT2'),/แก้ไขไฟล์แนบได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น/);
+  x.status='document_printed';
+  api.deleteAttachment(x.id,'ATT2');
+  assert.equal(x.attachments.length,0);
+});
+
+test('renameAttachment updates name and blocks empty name',()=>{
+  const {api}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'old.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  api.renameAttachment(x.id,'ATT1','new-name.jpg');
+  assert.equal(x.attachments[0].name,'new-name.jpg');
+  assert.throws(()=>api.renameAttachment(x.id,'ATT1','   '),/กรุณาระบุชื่อไฟล์/);
+  assert.equal(x.attachments[0].data,'data:image/jpeg;base64,AAA','other fields must remain untouched');
+});
+
+test('attachment mutation permission is fail-closed for unauthorized roles',()=>{
+  const owner=loadRequest();
+  const x=owner.api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  for(const r of ['clerk','viewer','requester','mystery']){
+    const guest=loadRequest(r);
+    guest.STATE.maintenanceRequests.push(x);
+    assert.throws(()=>guest.api.deleteAttachment(x.id,'ATT1'),/ไม่มีสิทธิ์แก้ไข/);
+    assert.throws(()=>guest.api.renameAttachment(x.id,'ATT1','x'),/ไม่มีสิทธิ์แก้ไข/);
+  }
+});
+
+test('attachment delete/rename are audited under maintenanceRequest entity',()=>{
+  const {api,calls}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'},{id:'ATT2',name:'b.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,BBB'}];
+  api.renameAttachment(x.id,'ATT1','renamed.jpg');
+  api.deleteAttachment(x.id,'ATT2');
+  const actions=calls.audit.slice(-2);
+  assert.deepEqual(actions.map(a=>a[0]),['แก้ไขชื่อไฟล์แนบ','ลบไฟล์แนบ']);
+  for(const a of actions){assert.equal(a[1],'maintenanceRequest');assert.equal(a[2],x.id)}
+});
+
+test('attachment edit/delete controls render outside the .thumb box to avoid the locked overflow:hidden clipping',()=>{
+  const {api,STATE}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'photo.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'},{id:'ATT2',name:'report.pdf',type:'application/pdf',data:'data:application/pdf;base64,BBB'}];
+  const imgHtml=api.attachmentHtml(x.attachments[0],true);
+  const fileHtml=api.attachmentHtml(x.attachments[1],true);
+  for(const html of [imgHtml,fileHtml]){
+    const thumbClose=html.indexOf('</div>');
+    const actionsStart=html.indexOf('class="thumb-actions"');
+    assert.ok(thumbClose>=0&&actionsStart>=0,'both .thumb and thumb-actions must be present');
+    assert.ok(actionsStart>thumbClose,'thumb-actions must start after the .thumb box closes, not nested inside it');
+    assert.match(html,/data-mr-attachment-edit="ATT\d"/);
+    assert.match(html,/data-mr-attachment-delete="ATT\d"/);
+  }
+  // non-mutable (e.g. request no longer editable) must render neither the actions block nor stray markup
+  const readOnlyHtml=api.attachmentHtml(x.attachments[0],false);
+  assert.doesNotMatch(readOnlyHtml,/thumb-actions/);
+});
