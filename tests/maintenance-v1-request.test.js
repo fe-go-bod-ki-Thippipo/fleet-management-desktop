@@ -41,3 +41,49 @@ test('regression isolation keeps non-maintenance render delegation unchanged',()
 test('hub permission is fail closed when role is undefined',()=>{const {ctx,api}=loadHub();ctx.CURRENT_ROLE=undefined;assert.equal(api.canView(),false)});
 
 test('Batch 4 integration stays additive and scripts load after Legacy Vendor Patch',()=>{const request=fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),hub=fs.readFileSync('src/renderer/app/maintenance-v1-hub.js','utf8'),index=fs.readFileSync('index.html','utf8');for(const src of [request,hub])assert.doesNotMatch(src,/assetProfile\s*=|assetForm\s*=|documentPage\s*=|NAV\.push|PARITY_MENU\[/);assert.match(index,/maintenance-v1-legacy-vendor-patch\.js[\s\S]*maintenance-v1-request\.js[\s\S]*maintenance-v1-hub\.js/)});
+
+test('deleteAttachment removes attachment when status draft/document_printed and blocked otherwise',()=>{
+  const {api,STATE}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'photo.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'},{id:'ATT2',name:'report.pdf',type:'application/pdf',data:'data:application/pdf;base64,BBB'}];
+  api.deleteAttachment(x.id,'ATT1');
+  assert.deepEqual(x.attachments.map(a=>a.id),['ATT2']);
+  x.status='approved';
+  assert.throws(()=>api.deleteAttachment(x.id,'ATT2'),/แก้ไขไฟล์แนบได้เฉพาะคำขอที่เป็นร่างหรือพิมพ์เอกสารแล้วเท่านั้น/);
+  x.status='document_printed';
+  api.deleteAttachment(x.id,'ATT2');
+  assert.equal(x.attachments.length,0);
+});
+
+test('renameAttachment updates name and blocks empty name',()=>{
+  const {api}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'old.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  api.renameAttachment(x.id,'ATT1','new-name.jpg');
+  assert.equal(x.attachments[0].name,'new-name.jpg');
+  assert.throws(()=>api.renameAttachment(x.id,'ATT1','   '),/กรุณาระบุชื่อไฟล์/);
+  assert.equal(x.attachments[0].data,'data:image/jpeg;base64,AAA','other fields must remain untouched');
+});
+
+test('attachment mutation permission is fail-closed for unauthorized roles',()=>{
+  const owner=loadRequest();
+  const x=owner.api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  for(const r of ['clerk','viewer','requester','mystery']){
+    const guest=loadRequest(r);
+    guest.STATE.maintenanceRequests.push(x);
+    assert.throws(()=>guest.api.deleteAttachment(x.id,'ATT1'),/ไม่มีสิทธิ์แก้ไข/);
+    assert.throws(()=>guest.api.renameAttachment(x.id,'ATT1','x'),/ไม่มีสิทธิ์แก้ไข/);
+  }
+});
+
+test('attachment delete/rename are audited under maintenanceRequest entity',()=>{
+  const {api,calls}=loadRequest();
+  const x=api.createRequest({...valid});
+  x.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'},{id:'ATT2',name:'b.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,BBB'}];
+  api.renameAttachment(x.id,'ATT1','renamed.jpg');
+  api.deleteAttachment(x.id,'ATT2');
+  const actions=calls.audit.slice(-2);
+  assert.deepEqual(actions.map(a=>a[0]),['แก้ไขชื่อไฟล์แนบ','ลบไฟล์แนบ']);
+  for(const a of actions){assert.equal(a[1],'maintenanceRequest');assert.equal(a[2],x.id)}
+});
