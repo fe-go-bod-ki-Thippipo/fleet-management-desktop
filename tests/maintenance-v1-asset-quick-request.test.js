@@ -16,7 +16,7 @@ test('quick request appears only on maintenance tab for allowed role',()=>{const
 
 test('quick request hidden when canCreate is false',()=>{const x=load({allowed:false});x.ctx.renderAssetTab({id:'A1'});assert.doesNotMatch(x.content.innerHTML,/\+ แจ้งซ่อม/)});
 
-test('click calls requestForm with current asset id prefill',()=>{const x=load();x.ctx.renderAssetTab({id:'A9'});x.content.elements.assetQuickMaintenanceRequestBtn.onclick();assert.deepEqual(x.calls.at(-1),['',{assetId:'A9'}])});
+test('click calls requestForm with current asset id prefill',()=>{const x=load();x.ctx.renderAssetTab({id:'A9'});x.content.elements.assetQuickMaintenanceRequestBtn.onclick();assert.equal(JSON.stringify(x.calls.at(-1)),JSON.stringify(['',{assetId:'A9'}]))});
 
 test('captured renderer content including request and repair history remains intact',()=>{const x=load();x.ctx.renderAssetTab({id:'A1'});assert.match(x.content.innerHTML,/คำขอแจ้งซ่อม/);assert.match(x.content.innerHTML,/ประวัติการซ่อม \(Work Order\)/);assert.match(x.content.innerHTML,/id="captured"/)});
 
