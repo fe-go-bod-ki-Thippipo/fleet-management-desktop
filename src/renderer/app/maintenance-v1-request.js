@@ -301,8 +301,8 @@
     const idx=mrAttachmentRegistry.length;
     mrAttachmentRegistry.push(a);
     const actions=mutable?`<div class="thumb-actions"><button type="button" class="btn sm" data-mr-attachment-edit="${esc(a.id)}">แก้ไข</button> <button type="button" class="btn sm" data-mr-attachment-delete="${esc(a.id)}">ลบ</button></div>`:'';
-    if(String(a.type||'').startsWith('image/')&&a.data)return `<div class="thumb"><img src="${esc(a.data)}" data-mr-attachment-view="${idx}" style="cursor:pointer"><small>${esc(a.name||'รูป')}</small>${actions}</div>`;
-    return a.data?`<div class="thumb"><button type="button" class="btn sm" data-mr-attachment-view="${idx}">${esc(a.name||'ไฟล์')}</button>${actions}</div>`:`<span>${esc(a.name||'ไฟล์')}</span>${actions}`;
+    if(String(a.type||'').startsWith('image/')&&a.data)return `<div class="thumb-wrap"><div class="thumb"><img src="${esc(a.data)}" data-mr-attachment-view="${idx}" style="cursor:pointer"><small>${esc(a.name||'รูป')}</small></div>${actions}</div>`;
+    return a.data?`<div class="thumb-wrap"><div class="thumb"><button type="button" class="btn sm" data-mr-attachment-view="${idx}">${esc(a.name||'ไฟล์')}</button></div>${actions}</div>`:`<span>${esc(a.name||'ไฟล์')}</span>${actions}`;
   }
   function bindAttachmentViewers(){
     if(typeof $$!=='function')return;
@@ -357,7 +357,7 @@
   window.FLEET_MAINTENANCE_REQUEST_TEST={
     ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
     canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,deleteAttachment,
-    renameAttachment,requestRegistry,
+    renameAttachment,attachmentHtml,requestRegistry,
     requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
     meterWarningMessage,applyMeterWarning,statusLabel
   };
