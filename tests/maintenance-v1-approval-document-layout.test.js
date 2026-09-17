@@ -62,7 +62,7 @@ test('external approval signature line appears before the ผู้อนุม�
   const x=load();
   const d=x.api.generateApprovalDocument('R1');
   const html=x.api.printSheetHtml(d);
-  const sigStart=html.indexOf('class="apd-signature"');
+  const sigStart=html.lastIndexOf('class="apd-signature"');
   assert.ok(sigStart>=0,'apd-signature element must exist');
   const sigBlock=html.slice(sigStart,sigStart+600);
   const signLinePos=sigBlock.indexOf('ลายเซ็นผู้อนุมัติ');
@@ -70,4 +70,24 @@ test('external approval signature line appears before the ผู้อนุม�
   const datePos=sigBlock.indexOf('วันที่ ______');
   assert.ok(signLinePos>=0&&approverLabelPos>signLinePos,'ลายเซ็นผู้อนุมัติ must appear before the ผู้อนุมัติ label');
   assert.ok(datePos>signLinePos,'ลายเซ็นผู้อนุมัติ must appear before the วันที่ label');
+});
+
+test('ข้อเสนอซ่อม is split into two columns: repair data on the left, หัวหน้าแผนกยานยนต์ signature on the right (mirroring ผลอนุมัติภายนอก)',()=>{
+  const x=load();
+  const d=x.api.generateApprovalDocument('R1');
+  const html=x.api.printSheetHtml(d);
+  const cardStart=html.indexOf('<span>ข้อเสนอซ่อม</span>');
+  const cardEnd=html.indexOf('<span>ผลอนุมัติภายนอก</span>');
+  assert.ok(cardStart>=0&&cardEnd>cardStart,'ข้อเสนอซ่อม card must exist before ผลอนุมัติภายนอก');
+  const proposalCard=html.slice(cardStart,cardEnd);
+  assert.match(proposalCard,/apd-card-body apd-approval/,'ข้อเสนอซ่อม must reuse the two-column apd-approval layout');
+  assert.match(proposalCard,/คำอธิบาย/);
+  assert.match(proposalCard,/ผู้ให้บริการที่เสนอ/);
+  assert.match(proposalCard,/ติดต่อ/);
+  assert.match(proposalCard,/ประมาณการ/);
+  assert.match(proposalCard,/หัวหน้าแผนกยานยนต์ ______/);
+  assert.match(proposalCard,/class="apd-signature"/);
+  const signLinePos=proposalCard.indexOf('ลงนาม');
+  const headLabelPos=proposalCard.indexOf('หัวหน้าแผนกยานยนต์ ______');
+  assert.ok(signLinePos>=0&&headLabelPos>signLinePos,'sign line/caption must appear before the หัวหน้าแผนกยานยนต์ label, matching ผลอนุมัติภายนอก convention');
 });
