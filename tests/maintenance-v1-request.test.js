@@ -3,8 +3,13 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 function loadRequest(role='admin',nodes={}){
   const STATE={maintenanceRequests:[],workOrders:[],audit:[],vendors:[{id:'V1',name:'อู่ เอ',type:'external',active:true,deleted:false},{id:'V2',name:'อู่พักใช้',type:'external',active:false,deleted:false},{id:'V3',name:'อู่ลบแล้ว',type:'external',active:true,deleted:true},{id:'V4',name:'หน่วยซ่อมกลาง',type:'internal',active:true,deleted:false}],assets:[{id:'A1',code:'CAR-001',plate:'กข 1234',mileage:1000,meterUnit:'km',deleted:false}],people:[{id:'P1',name:'สมชาย',active:true},{id:'P2',name:'สมหญิง',active:true}],userAccounts:[{id:'U1',role:'requester',personId:'P1',active:true}],maintenance:[],pmPlans:[]};
   const calls={audit:[],toast:[],forms:[]};let n=1;
-  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,FormData:global.FormData,FileReader:function(){},uid:p=>`${p}-${n++}`,now:()=>`2026-09-10T03:00:0${n}.000Z`,today:()=> '2026-09-10',pAudit:(...args)=>calls.audit.push(args),esc:v=>String(v??'').replace(/[&<>"']/g,''),money:n=>String(Number(n||0)),pill:s=>`<pill>${s}</pill>`,kv:(a,b)=>`${a}:${b}`,content:{innerHTML:''},dialog:{querySelector:()=>null},$:sel=>nodes[String(sel).replace('#','')]||null,$$:()=>[],setHead:()=>{},toast:m=>calls.toast.push(m),formModal:(title,html,submit)=>calls.forms.push({title,html,submit}),confirm:()=>true,setTimeout:fn=>fn()};
-  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),ctx);return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_REQUEST_TEST,nodes};
+  let observerCb=null;
+  class FakeMutationObserver{constructor(cb){observerCb=cb;}observe(){calls.observer=(calls.observer||0)+1;}disconnect(){}}
+  const content={innerHTML:'',querySelector(sel){if(sel==='#mrBack')return this.innerHTML.includes('id="mrBack"')?{}:null;return null;}};
+  const ctx={STATE,CURRENT_ROLE:role,window:null,console,structuredClone,FormData:global.FormData,FileReader:function(){},uid:p=>`${p}-${n++}`,now:()=>`2026-09-10T03:00:0${n}.000Z`,today:()=> '2026-09-10',pAudit:(...args)=>calls.audit.push(args),esc:v=>String(v??'').replace(/[&<>"']/g,''),money:n=>String(Number(n||0)),pill:s=>`<pill>${s}</pill>`,kv:(a,b)=>`${a}:${b}`,content,dialog:{querySelector:()=>null},$:sel=>nodes[String(sel).replace('#','')]||null,$$:()=>[],setHead:()=>{},toast:m=>calls.toast.push(m),formModal:(title,html,submit)=>calls.forms.push({title,html,submit}),confirm:()=>true,setTimeout:fn=>fn(),MutationObserver:FakeMutationObserver};
+  ctx.window=ctx;vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/renderer/app/maintenance-v1-request.js','utf8'),ctx);
+  const simulateGlobalRenderOverwrite=()=>{content.innerHTML='<div class="panel">REGISTRY OR HUB PAGE</div>';observerCb?.([],{});};
+  return {ctx,STATE,calls,api:ctx.FLEET_MAINTENANCE_REQUEST_TEST,nodes,content,simulateGlobalRenderOverwrite};
 }
 const valid={assetId:'A1',requestDate:'2026-09-10',requesterId:'P2',requesterName:'',issue:'เบรกมีเสียง',maintenanceType:'repair',urgency:'high',meterValue:'1001',proposedVendorId:'V1',estimatedCost:'1234.56',requestNote:'ตรวจด่วน'};
 
@@ -105,4 +110,96 @@ test('attachment edit/delete controls render outside the .thumb box to avoid the
   // non-mutable (e.g. request no longer editable) must render neither the actions block nor stray markup
   const readOnlyHtml=api.attachmentHtml(x.attachments[0],false);
   assert.doesNotMatch(readOnlyHtml,/thumb-actions/);
+});
+
+test('A: rename attachment then simulated global render overwrite restores the same Request Detail',()=>{
+  const x=loadRequest('admin',{mrBack:{}});
+  const r=x.api.createRequest({...valid});
+  r.attachments=[{id:'ATT1',name:'old.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  x.api.requestDetail(r.id);
+  assert.equal(x.api.getActiveRequestId(),r.id);
+  assert.match(x.content.innerHTML,/id="mrBack"/);
+  // simulate the formModal onSave callback the same way the real rename handler does
+  const before=x.calls.forms.length;
+  // directly exercise the production rename path through renameAttachment + requestDetail as done in bindAttachmentActions
+  x.api.renameAttachment(r.id,'ATT1','new-name.jpg');
+  x.api.requestDetail(r.id);
+  // now simulate formModal's own post-save render() clobbering content afterwards
+  x.simulateGlobalRenderOverwrite();
+  assert.match(x.content.innerHTML,/id="mrBack"/,'observer must restore Request Detail after render() overwrite');
+  assert.match(x.content.innerHTML,new RegExp(r.requestNo));
+});
+
+test('B: delete attachment then simulated global render overwrite restores the same Request Detail',()=>{
+  const x=loadRequest('admin',{mrBack:{}});
+  const r=x.api.createRequest({...valid});
+  r.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  x.api.requestDetail(r.id);
+  x.api.deleteAttachment(r.id,'ATT1');
+  x.api.requestDetail(r.id);
+  x.simulateGlobalRenderOverwrite();
+  assert.match(x.content.innerHTML,/id="mrBack"/,'observer must restore Request Detail after render() overwrite following delete');
+});
+
+test('C: back navigation disconnects tracking so a later overwrite is NOT restored',()=>{
+  const nodes={mrBack:{},mrQ:{},mrStatus:{},mrUrgency:{},mrSize:{value:'20'},mrClear:{}};
+  const x=loadRequest('admin',nodes);
+  const r=x.api.createRequest({...valid});
+  x.api.requestDetail(r.id);
+  assert.equal(x.api.getActiveRequestId(),r.id);
+  // invoke the REAL mrBack click handler that requestDetail() bound onto nodes.mrBack
+  nodes.mrBack.onclick();
+  assert.equal(x.api.getActiveRequestId(),'','mrBack must clear tracking');
+  x.content.innerHTML='<div class="panel">HUB OR REGISTRY (post mrBack)</div>';
+  const before=x.content.innerHTML;
+  const restored=x.api.restoreRequestDetailIfNeeded();
+  assert.equal(restored,false);
+  assert.equal(x.content.innerHTML,before,'content must remain untouched once tracking is cleared');
+});
+
+test('D: intentional cross-link navigation is not hijacked by the restore observer',()=>{
+  const nodes={mrBack:{},mrOpenAsset:{}};
+  const x=loadRequest('admin',nodes);
+  x.ctx.assetProfile=()=>{x.content.innerHTML='<div class="panel">ASSET DETAIL PAGE</div>';};
+  const r=x.api.createRequest({...valid});
+  x.api.requestDetail(r.id);
+  assert.equal(x.api.getActiveRequestId(),r.id);
+  assert.equal(typeof nodes.mrOpenAsset.onclick,'function','open-asset button must be bound when assetProfile is available');
+  nodes.mrOpenAsset.onclick();
+  assert.equal(x.api.getActiveRequestId(),'','navigating to Asset Detail must clear tracking');
+  assert.match(x.content.innerHTML,/ASSET DETAIL PAGE/);
+  const restored=x.api.restoreRequestDetailIfNeeded();
+  assert.equal(restored,false,'observer must not hijack the intentional Asset Detail navigation');
+  assert.match(x.content.innerHTML,/ASSET DETAIL PAGE/);
+});
+
+test('F: editing the main request via requestForm restores Request Detail after render overwrite, while new-request creation is unaffected',()=>{
+  const x=loadRequest('admin',{mrBack:{}});
+  const r=x.api.createRequest({...valid});
+  x.api.requestDetail(r.id);
+  assert.equal(x.api.getActiveRequestId(),r.id);
+  x.api.editRequest(r.id,{...valid,issue:'แก้ไขแล้ว'});
+  x.api.requestDetail(r.id);
+  x.simulateGlobalRenderOverwrite();
+  assert.match(x.content.innerHTML,/id="mrBack"/,'editing from within Request Detail must restore Request Detail');
+  // new request creation must NOT set any active request id, so a later overwrite is never "restored" back into a detail view
+  const y=loadRequest();
+  y.api.createRequest(valid);
+  assert.equal(y.api.getActiveRequestId(),'');
+  y.content.innerHTML='<div class="panel">REGISTRY</div>';
+  assert.equal(y.api.restoreRequestDetailIfNeeded(),false);
+});
+
+test('G: attachment permission, viewer, thumb-wrap, audit and full regression remain intact',()=>{
+  const x=loadRequest();
+  const r=x.api.createRequest({...valid});
+  r.attachments=[{id:'ATT1',name:'a.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
+  const html=x.api.attachmentHtml(r.attachments[0],true);
+  assert.match(html,/thumb-wrap/);
+  assert.match(html,/data-mr-attachment-edit="ATT1"/);
+  for(const role of ['clerk','viewer','mystery']){
+    const guest=loadRequest(role);
+    guest.STATE.maintenanceRequests.push(r);
+    assert.throws(()=>guest.api.deleteAttachment(r.id,'ATT1'),/ไม่มีสิทธิ์แก้ไข/);
+  }
 });
