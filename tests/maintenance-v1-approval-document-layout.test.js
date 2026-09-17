@@ -72,7 +72,7 @@ test('external approval signature line appears before the ผู้อนุม�
   assert.ok(datePos>signLinePos,'ลายเซ็นผู้อนุมัติ must appear before the วันที่ label');
 });
 
-test('ข้อเสนอซ่อม is split into two columns: repair data on the left, หัวหน้าแผนกยานยนต์ signature on the right (mirroring ผลอนุมัติภายนอก)',()=>{
+test('ข้อเสนอซ่อม is split into two columns: repair data (each field full-width) on the left, bottom-aligned หัวหน้าแผนกยานยนต์ signature on the right',()=>{
   const x=load();
   const d=x.api.generateApprovalDocument('R1');
   const html=x.api.printSheetHtml(d);
@@ -81,13 +81,25 @@ test('ข้อเสนอซ่อม is split into two columns: repair data o
   assert.ok(cardStart>=0&&cardEnd>cardStart,'ข้อเสนอซ่อม card must exist before ผลอนุมัติภายนอก');
   const proposalCard=html.slice(cardStart,cardEnd);
   assert.match(proposalCard,/apd-card-body apd-approval/,'ข้อเสนอซ่อม must reuse the two-column apd-approval layout');
-  assert.match(proposalCard,/คำอธิบาย/);
-  assert.match(proposalCard,/ผู้ให้บริการที่เสนอ/);
-  assert.match(proposalCard,/ติดต่อ/);
-  assert.match(proposalCard,/ประมาณการ/);
-  assert.match(proposalCard,/หัวหน้าแผนกยานยนต์ ______/);
-  assert.match(proposalCard,/class="apd-signature"/);
-  const signLinePos=proposalCard.indexOf('ลงนาม');
-  const headLabelPos=proposalCard.indexOf('หัวหน้าแผนกยานยนต์ ______');
-  assert.ok(signLinePos>=0&&headLabelPos>signLinePos,'sign line/caption must appear before the หัวหน้าแผนกยานยนต์ label, matching ผลอนุมัติภายนอก convention');
+  // all four data fields must each be their own full-width row (apd-wide) for readability
+  for(const label of ['คำอธิบาย','ผู้ให้บริการที่เสนอ','ติดต่อ','ประมาณการ']){
+    assert.match(proposalCard,new RegExp('apd-field apd-wide"><span class="apd-label">'+label));
+  }
+  assert.match(proposalCard,/class="apd-signature apd-signature-bottom"/,'ข้อเสนอซ่อม signature column must use the bottom-aligned modifier, unlike ผลอนุมัติภายนอก');
+  assert.doesNotMatch(proposalCard,/ลงนาม/,'the redundant ลงนาม caption was removed');
+  const signLineTopPos=proposalCard.indexOf('apd-sign-line-top');
+  const headLabelPos=proposalCard.indexOf('หัวหน้าแผนกยานยนต์');
+  const datePos=proposalCard.indexOf('วันที่ ______');
+  assert.ok(signLineTopPos>=0&&headLabelPos>signLineTopPos,'blank sign line must appear before the หัวหน้าแผนกยานยนต์ caption');
+  assert.ok(datePos>headLabelPos,'วันที่ must appear right after the หัวหน้าแผนกยานยนต์ caption');
+  // the ผลอนุมัติภายนอก signature block must remain top-aligned and unaffected
+  const approvalCard=html.slice(cardEnd);
+  assert.doesNotMatch(approvalCard,/apd-signature-bottom/,'ผลอนุมัติภายนอก signature must NOT be affected by the bottom-alignment change made to ข้อเสนอซ่อม');
+});
+
+test('field labels are enlarged (13px) while remaining bold',()=>{
+  const x=load();
+  const d=x.api.generateApprovalDocument('R1');
+  const html=x.api.printSheetHtml(d);
+  assert.match(html,/\.apd-label\{font-size:13px;font-weight:700/);
 });
