@@ -26,27 +26,48 @@ test('urgency is rendered inside the document header meta block, not inside the 
   assert.match(metaBlock,/apd-urgency-critical/);
 });
 
-test('request section no longer shows เลขที่คำขอ/วันที่/ความเร่งด่วน as its own fields, but keeps the other fields',()=>{
+test('merged request+asset card no longer shows เลขที่คำขอ/วันที่/ความเร่งด่วน as their own fields, but keeps the other request fields and full asset fields',()=>{
   const x=load();
   const d=x.api.generateApprovalDocument('R1');
   const html=x.api.printSheetHtml(d);
-  const requestSection=html.slice(html.indexOf('<span>คำขอ</span>'),html.indexOf('<span>ทรัพย์สิน</span>'));
-  assert.doesNotMatch(requestSection,/เลขที่คำขอ/);
-  assert.doesNotMatch(requestSection,/apd-label">วันที่</);
-  assert.doesNotMatch(requestSection,/ความเร่งด่วน/);
-  assert.match(requestSection,/ผู้แจ้ง/);
-  assert.match(requestSection,/หน่วยงาน/);
-  assert.match(requestSection,/อาการ \/ เหตุผล/);
-  assert.match(requestSection,/หมายเหตุ/);
+  const cardStart=html.indexOf('<span>คำขอ / ทรัพย์สิน</span>');
+  const cardEnd=html.indexOf('<span>ข้อเสนอซ่อม</span>');
+  assert.ok(cardStart>=0&&cardEnd>cardStart,'merged request+asset card must exist as a single section before ข้อเสนอซ่อม');
+  const mergedSection=html.slice(cardStart,cardEnd);
+  assert.doesNotMatch(mergedSection,/เลขที่คำขอ/);
+  assert.doesNotMatch(mergedSection,/apd-label">วันที่</);
+  assert.doesNotMatch(mergedSection,/ความเร่งด่วน/);
+  assert.match(mergedSection,/ผู้แจ้ง/);
+  assert.match(mergedSection,/หน่วยงาน/);
+  assert.match(mergedSection,/อาการ \/ เหตุผล/);
+  assert.match(mergedSection,/หมายเหตุ/);
+  assert.match(mergedSection,/รหัสทรัพย์สิน/);
+  assert.match(mergedSection,/ทะเบียน \/ ชื่อ/);
+  assert.match(mergedSection,/ยี่ห้อ \/ รุ่น/);
+  // must appear as ONE apd-card, not two
+  assert.equal((html.match(/class="apd-card"/g)||[]).length<=3,true,'request+asset must be merged into a single card, leaving at most: merged card, ข้อเสนอซ่อม, ผลอนุมัติภายนอก');
 });
 
-test('photo gallery images are sized in the enlarged ~180-200px range on screen',()=>{
+test('photo gallery markup and CSS are fully removed from printSheetHtml output (moved out to the future repair-history document instead)',()=>{
   const x=load();
-  const d=x.api.generateApprovalDocument('R1');
-  // force an image attachment through a second request with an attachment for this dedicated size check
   x.STATE.maintenanceRequests[0].attachments=[{id:'ATT1',name:'p.jpg',type:'image/jpeg',data:'data:image/jpeg;base64,AAA'}];
   const d2=x.api.generateApprovalDocument('R1');
   const html=x.api.printSheetHtml(d2);
-  assert.match(html,/\.apd-photo-item\{width:19[0-9]px\}/);
-  assert.match(html,/\.apd-photo-item img\{width:19[0-9]px;height:1[0-9]{2}px/);
+  assert.doesNotMatch(html,/apd-photo-item/);
+  assert.doesNotMatch(html,/รูปประกอบอาการ/);
+  assert.equal(d2.snapshotData.attachments.length,1,'the underlying snapshot still captures the photo data for later reuse');
+});
+
+test('external approval signature line appears before the ผู้อนุมัติ/วันที่ labels',()=>{
+  const x=load();
+  const d=x.api.generateApprovalDocument('R1');
+  const html=x.api.printSheetHtml(d);
+  const sigStart=html.indexOf('class="apd-signature"');
+  assert.ok(sigStart>=0,'apd-signature element must exist');
+  const sigBlock=html.slice(sigStart,sigStart+600);
+  const signLinePos=sigBlock.indexOf('ลายเซ็นผู้อนุมัติ');
+  const approverLabelPos=sigBlock.indexOf('ผู้อนุมัติ ______');
+  const datePos=sigBlock.indexOf('วันที่ ______');
+  assert.ok(signLinePos>=0&&approverLabelPos>signLinePos,'ลายเซ็นผู้อนุมัติ must appear before the ผู้อนุมัติ label');
+  assert.ok(datePos>signLinePos,'ลายเซ็นผู้อนุมัติ must appear before the วันที่ label');
 });
