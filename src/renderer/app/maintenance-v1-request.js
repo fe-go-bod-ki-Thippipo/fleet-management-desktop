@@ -296,6 +296,7 @@
     overlay.querySelectorAll?.('[data-mr-viewer-close]').forEach(b=>b.addEventListener('click',closeAttachmentViewer));
   }
   let mrAttachmentRegistry=[];
+  let mrActiveRequestId='';
   function attachmentHtml(a,mutable){
     if(!a)return '';
     const idx=mrAttachmentRegistry.length;
@@ -318,7 +319,7 @@
         const current=(STATE.maintenanceRequests.find(r=>r&&r.id===requestId)?.attachments||[]).find(a=>a&&a.id===attId);
         formModal('แก้ไขชื่อไฟล์แนบ',`<label class="wide">ชื่อไฟล์<input name="name" required value="${esc(current?.name||'')}"></label>`,p=>{
           const x=renameAttachment(requestId,attId,p.name);
-          setTimeout(()=>requestDetail(requestId),0);
+          requestDetail(requestId);
           return x;
         });
       };
@@ -340,6 +341,7 @@
     ensureRequestState();const r=STATE.maintenanceRequests.find(x=>x&&x.id===id);if(!r)return requestRegistry();
     const a=assetById(r.assetId),wos=(STATE.workOrders||[]).filter(wo=>wo&&wo.sourceRequestId===r.id),logs=STATE.audit.filter(x=>x&&x.entity==='maintenanceRequest'&&x.recordId===r.id);
     mrAttachmentRegistry=[];
+    mrActiveRequestId=id;
     const canOpenAsset=Boolean(a)&&typeof assetProfile!=='undefined';
     const assetFieldHtml=kv('ทรัพย์สิน',assetLabelFor(a))+(canOpenAsset?'<button type="button" class="btn sm" id="mrOpenAsset" style="margin-left:-8px">เปิดดูทรัพย์สิน</button>':'');
     setHead(r.requestNo,'Maintenance Request Detail');
@@ -347,17 +349,33 @@
     content.innerHTML=`<div class="panel"><div class="toolbar"><button class="btn" id="mrBack">← กลับทะเบียน</button><div>${canEdit()&&['draft','document_printed'].includes(r.status)?'<button class="btn" id="mrEdit">แก้ไข</button>':''}${canCancel()&&r.status==='draft'?' <button class="btn" id="mrCancel">ยกเลิกคำขอ</button>':''}</div></div><div class="hero-info">${kv('เลขที่คำขอ',r.requestNo)}${assetFieldHtml}${kv('สถานะ',statusLabel(r.status))}${kv('ความเร่งด่วน',urgencyLabel(r.urgency))}${kv('ประมาณการ',`฿${money(r.estimatedCost)}`)}${kv('Work Order',hasWorkOrder(r)?'มีแล้ว':'ยังไม่มี')}</div></div>
       <div class="grid2"><div class="panel"><h3>ข้อมูลคำขอ</h3><div class="grid3">${kv('วันที่แจ้ง',r.requestDate)}${kv('ผู้แจ้ง',r.requesterNameSnapshot)}${kv('ประเภทงาน',typeLabel(r.maintenanceType))}${kv('มิเตอร์',r.meterValue===''?'-':r.meterValue)}${kv('อู่ที่เสนอ',r.proposedVendorNameSnapshot||'-')}${kv('ประมาณการ',money(r.estimatedCost))}</div><h4>ปัญหา/อาการ</h4><p>${esc(r.issue||'-')}</p><h4>หมายเหตุ</h4><p>${esc(r.requestNote||'-')}</p></div><div class="panel"><h3>ไฟล์ / รูป</h3><div class="thumb-row">${(r.attachments||[]).map(a=>attachmentHtml(a,attachMutable)).join('')||'<div class="empty">ยังไม่มีไฟล์แนบ</div>'}</div></div></div>
       <div class="grid2"><div class="panel"><h3>งานซ่อมที่เกี่ยวข้อง</h3>${wos.length?`<table><thead><tr><th>เลขที่</th><th>สถานะ</th></tr></thead><tbody>${wos.map(wo=>`<tr data-mr-related-wo="${esc(wo.id)}" style="cursor:pointer"><td>${esc(wo.workOrderNo||wo.no||wo.id)}</td><td>${esc(wo.status||'-')}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">ยังไม่มีงานซ่อมที่เกี่ยวข้อง</div>'}</div><div class="panel"><h3>ประวัติ / Audit</h3>${logs.map(l=>`<div class="timeline-row"><b>${esc(l.action||'-')}</b><span>${esc(l.ts||'')} · ${esc(l.user||'')}</span></div>`).join('')||'<div class="empty">ยังไม่มีประวัติ</div>'}</div></div>`;
-    $('#mrBack').onclick=()=>window.FLEET_MAINTENANCE_HUB_TEST?.maintenanceHubPage?window.FLEET_MAINTENANCE_HUB_TEST.maintenanceHubPage():requestRegistry();if($('#mrEdit'))$('#mrEdit').onclick=()=>requestForm(r.id);if($('#mrCancel'))$('#mrCancel').onclick=()=>{try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(r.id);requestDetail(r.id);toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}};
-    if($('#mrOpenAsset')&&a)$('#mrOpenAsset').onclick=()=>assetProfile(a.id);
-    if(typeof $$==='function')$$('[data-mr-related-wo]').forEach(row=>row.onclick=()=>{window.FLEET_MAINTENANCE_WORKORDER_API?.workOrderDetail?.(row.dataset.mrRelatedWo);});
+    $('#mrBack').onclick=()=>{mrActiveRequestId='';window.FLEET_MAINTENANCE_HUB_TEST?.maintenanceHubPage?window.FLEET_MAINTENANCE_HUB_TEST.maintenanceHubPage():requestRegistry();};if($('#mrEdit'))$('#mrEdit').onclick=()=>requestForm(r.id);if($('#mrCancel'))$('#mrCancel').onclick=()=>{try{if(typeof confirm==='function'&&!confirm('ยืนยันยกเลิกคำขอซ่อมนี้?'))return;cancelRequest(r.id);requestDetail(r.id);toast('ยกเลิกคำขอซ่อมแล้ว')}catch(x){toast(x.message||String(x),true)}};
+    if($('#mrOpenAsset')&&a)$('#mrOpenAsset').onclick=()=>{mrActiveRequestId='';assetProfile(a.id);};
+    if(typeof $$==='function')$$('[data-mr-related-wo]').forEach(row=>row.onclick=()=>{mrActiveRequestId='';window.FLEET_MAINTENANCE_WORKORDER_API?.workOrderDetail?.(row.dataset.mrRelatedWo);});
     bindAttachmentViewers();
     bindAttachmentActions(r.id);
+  }
+
+  function restoreRequestDetailIfNeeded(){
+    if(!mrActiveRequestId)return false;
+    if(!content?.querySelector)return false;
+    if(content.querySelector('#mrBack'))return false;
+    const still=STATE.maintenanceRequests?.find?.(x=>x&&x.id===mrActiveRequestId);
+    if(!still)return false;
+    requestDetail(mrActiveRequestId);
+    return true;
+  }
+  let mrDetailObserver=null;
+  if(typeof MutationObserver==='function'&&content){
+    mrDetailObserver=new MutationObserver(()=>restoreRequestDetailIfNeeded());
+    mrDetailObserver.observe(content,{childList:true,subtree:true});
   }
 
   window.FLEET_MAINTENANCE_REQUEST_TEST={
     ensureRequestState,activeVendors,nextRequestNo,hasWorkOrder,workOrderBadge,validateVendor,
     canView,canCreate,canEdit,canCancel,createRequest,editRequest,cancelRequest,deleteAttachment,
-    renameAttachment,attachmentHtml,requestRegistry,
+    renameAttachment,attachmentHtml,requestRegistry,restoreRequestDetailIfNeeded,
+    getActiveRequestId:()=>mrActiveRequestId,
     requestDetail,requestForm,renderRequestRows,buildRequestPayload,role,actor,assetLabelFor,
     meterWarningMessage,applyMeterWarning,statusLabel
   };
