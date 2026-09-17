@@ -39,13 +39,14 @@ test('buildSnapshot keeps only image attachments and caps at 4, storing name/dat
   assert.ok(!d.snapshotData.attachments.some(a=>a.name==='report.pdf'),'pdf must be excluded from snapshot');
 });
 
-test('printSheetHtml renders photo gallery section when snapshot has images',()=>{
+test('printSheetHtml no longer renders the photo gallery section on screen/print, even though the snapshot still captures up to 4 image attachments',()=>{
   const x=load();
   const d=x.api.generateApprovalDocument('R1');
   const html=x.api.printSheetHtml(d);
-  assert.match(html,/รูปประกอบอาการ/);
-  assert.match(html,/<img src="data:image\/jpeg;base64,AAA" alt="damage1.jpg">/);
-  assert.equal((html.match(/<div class="apd-photo-item">/g)||[]).length,4);
+  assert.doesNotMatch(html,/รูปประกอบอาการ/);
+  assert.doesNotMatch(html,/apd-photo-item/);
+  assert.equal(d.snapshotData.attachments.length,4,'snapshot must still capture the photos for the future repair-history document, even though this document no longer prints them');
+  assert.equal(d.snapshotData.attachments[0].name,'damage1.jpg');
 });
 
 test('printSheetHtml omits photo gallery section entirely when request has no image attachments',()=>{
@@ -75,8 +76,8 @@ test('generated document photo snapshot stays frozen after the source request at
   liveRequest.attachments.splice(1,1); // delete the 2nd attachment
   // re-render the already generated v1 document
   const htmlAfterMutation=x.api.printSheetHtml(d);
-  assert.match(htmlAfterMutation,/damage1\.jpg/,'frozen snapshot must still show the original name');
-  assert.doesNotMatch(htmlAfterMutation,/renamed-after-print\.jpg/,'frozen snapshot must not reflect the later rename');
+  assert.doesNotMatch(htmlAfterMutation,/renamed-after-print\.jpg/,'the document no longer prints photos at all, so the rename must not leak in either');
+  assert.equal(d.snapshotData.attachments[0].name,'damage1.jpg','frozen snapshot must still hold the original name internally even though it is no longer printed');
   assert.equal(d.snapshotData.attachments.length,4,'frozen snapshot count must be unaffected by later deletion of the live request attachments');
   assert.equal(Object.isFrozen(d.snapshotData.attachments),true,'snapshot attachments array must be frozen');
   assert.equal(Object.isFrozen(d.snapshotData.attachments[0]),true,'each snapshot attachment object must be frozen');
